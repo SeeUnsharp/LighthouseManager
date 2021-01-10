@@ -15,14 +15,11 @@ namespace LighthouseManager
     /// </summary>
     public class BluetoothManager
     {
-        private readonly string PwrService = "00001523-1212-efde-1523-785feabcd124";
-        private readonly string PwrCharacteristic = "00001525-1212-efde-1523-785feabcd124";
+        private readonly string _pwrService = "00001523-1212-efde-1523-785feabcd124";
+        private readonly string _pwrCharacteristic = "00001525-1212-efde-1523-785feabcd124";
         private const int PwrOn = 0x01;
         private const int PwrOff = 0x00;
-        private readonly int E_ACCESSDENIED = unchecked((int) 0x80070005);
-        private readonly int E_BLUETOOTH_ATT_INVALID_PDU = unchecked((int) 0x80650004);
-        private readonly int E_BLUETOOTH_ATT_WRITE_NOT_PERMITTED = unchecked((int) 0x80650003);
-        private readonly int E_DEVICE_NOT_AVAILABLE = unchecked((int) 0x800710df);
+        private readonly int _eDeviceNotAvailable = unchecked((int) 0x800710df);
         private BluetoothLEAdvertisementWatcher AdvertisementWatcher { get; set; }
 
         public static List<ulong> Basestations { get; set; } = new();
@@ -85,7 +82,7 @@ namespace LighthouseManager
 
                 if (device == null) Console.WriteLine($"{address.ToMacString()}: Failed to connect to device.");
             }
-            catch (Exception ex) when (ex.HResult == E_DEVICE_NOT_AVAILABLE)
+            catch (Exception ex) when (ex.HResult == _eDeviceNotAvailable)
             {
                 Console.WriteLine("Bluetooth radio is not on.");
             }
@@ -98,14 +95,14 @@ namespace LighthouseManager
                 if (gattServiceResult.Status == GattCommunicationStatus.Success)
                 {
                     var characteristicsResult = await gattServiceResult.Services
-                        .Single(s => s.Uuid == Guid.Parse(PwrService))
+                        .Single(s => s.Uuid == Guid.Parse(_pwrService))
                         .GetCharacteristicsAsync();
 
                     if (characteristicsResult.Status == GattCommunicationStatus.Success)
                     {
                         var charac =
                             characteristicsResult.Characteristics.Single(c =>
-                                c.Uuid == Guid.Parse(PwrCharacteristic));
+                                c.Uuid == Guid.Parse(_pwrCharacteristic));
                         try
                         {
                             var writer = new DataWriter();
