@@ -16,14 +16,7 @@ namespace LighthouseManager
                 .RegisterHelpFlag("-h", "--help")
                 .Given.Flag("-s", "--scan").Then(() =>
                 {
-                    try
-                    {
-                        BluetoothManager.StartWatcher();
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine(e);
-                    }
+                    BluetoothManager.StartWatcher();
                 })
                 .Given.Flag("-on").Then(b => b
                     .ListParameter("-a", "--addresses")
@@ -34,7 +27,7 @@ namespace LighthouseManager
                         var baseStations = addresses.Select(g => g.ToMacUlong());
 
                         foreach (var baseStation in baseStations)
-                           BluetoothManager.ChangePowerstate(baseStation, Powerstate.On);
+                            BluetoothManager.ChangePowerstate(baseStation, Powerstate.On);
                     }))
                 .Given.Flag("-off").Then(b => b
                     .ListParameter("-a", "--addresses")
