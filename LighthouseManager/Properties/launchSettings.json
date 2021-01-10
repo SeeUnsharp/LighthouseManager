@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "LighthouseManager": {
+      "commandName": "Project",
+      "commandLineArgs": "-s"
+    }
+  }
+}
