@@ -100,20 +100,19 @@ namespace LighthouseManager
 
                     if (characteristicsResult.Status == GattCommunicationStatus.Success)
                     {
-                        var charac =
+                        var characteristic =
                             characteristicsResult.Characteristics.Single(c =>
                                 c.Uuid == Guid.Parse(_pwrCharacteristic));
                         try
                         {
                             var writer = new DataWriter();
                             writer.WriteByte(powerState == Powerstate.On ? PwrOn : PwrOff);
-                            var result = await charac.WriteValueWithResultAsync(writer.DetachBuffer());
+                            var result = await characteristic.WriteValueWithResultAsync(writer.DetachBuffer());
 
-                            if (result.Status == GattCommunicationStatus.Success)
-                                Console.WriteLine(
-                                    $"{address.ToMacString()}: Successfully executed '{powerState}' command.");
-                            else
-                                Console.WriteLine($"{address.ToMacString()}: Execution failed: {result.Status}");
+                            Console.WriteLine(
+                                result.Status == GattCommunicationStatus.Success
+                                    ? $"{address.ToMacString()}: Successfully executed '{powerState}' command."
+                                    : $"{address.ToMacString()}: Execution failed: {result.Status}.");
                         }
                         catch (Exception ex)
                         {
