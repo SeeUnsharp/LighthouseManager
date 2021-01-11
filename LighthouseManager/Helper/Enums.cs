@@ -2,6 +2,6 @@
 {
     public enum Powerstate
     {
-        On, Off, Sleep, Standby
+        Wake, Sleep, Standby
     }
 }
