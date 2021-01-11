@@ -12,7 +12,7 @@ namespace LighthouseManager
         private static void Main(string[] args)
         {
             FluentArgsBuilder.New()
-                .DefaultConfigsWithAppDescription("An app to manage SteamVR Lighthouse")
+                .DefaultConfigsWithAppDescription("An app to manage SteamVR Lighthouse.")
                 .RegisterHelpFlag("-h", "--help")
                 .Given.Flag("-s", "--scan").Then(() =>
                 {
@@ -20,7 +20,7 @@ namespace LighthouseManager
                 })
                 .Given.Flag("-on").Then(b => b
                     .ListParameter("-a", "--addresses")
-                    .WithValidation(n => !string.IsNullOrWhiteSpace(n), "An address must not only contain whitespace")
+                    .WithValidation(n => !string.IsNullOrWhiteSpace(n), "An address must not only contain whitespace.")
                     .IsRequired()
                     .Call(addresses =>
                     {
@@ -31,7 +31,7 @@ namespace LighthouseManager
                     }))
                 .Given.Flag("-off").Then(b => b
                     .ListParameter("-a", "--addresses")
-                    .WithValidation(n => !string.IsNullOrWhiteSpace(n), "An address must not only contain whitespace")
+                    .WithValidation(n => !string.IsNullOrWhiteSpace(n), "An address must not only contain whitespace.")
                     .IsRequired()
                     .Call(addresses =>
                     {
