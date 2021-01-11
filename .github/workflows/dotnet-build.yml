@@ -18,4 +18,9 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
     - name: Build
-      run: dotnet publish -r win-x64 -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true -p:PublishTrimmed=True -p:DebugType=None --self-contained
+      run: dotnet publish --configuration Release -r win-x64 -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true -p:PublishTrimmed=True -p:DebugType=None --self-contained      
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v2.2.2
+      with:
+        name: LighthouseManager-win10-64
+        path: LighthouseManager/bin/Release/*/win-x64/publish/*.exe
