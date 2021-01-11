@@ -15,11 +15,8 @@ namespace LighthouseManager
     /// </summary>
     public class BluetoothManager : IDisposable
     {
-        private readonly string _pwrService = "00001523-1212-efde-1523-785feabcd124";
-        private readonly string _pwrCharacteristic = "00001525-1212-efde-1523-785feabcd124";
-        private const int PwrOn = 0x01;
-        private const int PwrOff = 0x00;
-        private readonly int _eDeviceNotAvailable = unchecked((int)0x800710df);
+        private readonly int _eDeviceNotAvailable = unchecked((int) 0x800710df);
+        private readonly string _pwrService = "00001523-1212-EFDE-1523-785FEABCD124";
         private BluetoothLEAdvertisementWatcher AdvertisementWatcher { get; set; }
         private List<BluetoothLEDevice> BluetoothLeDevices { get; } = new();
         private List<ulong> Basestations { get; } = new();
@@ -29,7 +26,7 @@ namespace LighthouseManager
         /// </summary>
         public void StartWatcher()
         {
-            AdvertisementWatcher = new BluetoothLEAdvertisementWatcher { ScanningMode = BluetoothLEScanningMode.Active };
+            AdvertisementWatcher = new BluetoothLEAdvertisementWatcher {ScanningMode = BluetoothLEScanningMode.Active};
             AdvertisementWatcher.Received += WatcherOnReceived;
 
             try
@@ -48,9 +45,7 @@ namespace LighthouseManager
         public void StopWatcher()
         {
             if (AdvertisementWatcher.Status == BluetoothLEAdvertisementWatcherStatus.Started)
-            {
                 AdvertisementWatcher.Stop();
-            }
 
             Basestations.Clear();
         }
@@ -94,9 +89,7 @@ namespace LighthouseManager
             if (device != null)
             {
                 if (BluetoothLeDevices.All(x => x.BluetoothAddress != device.BluetoothAddress))
-                {
                     BluetoothLeDevices.Add(device);
-                }
 
                 Console.WriteLine($"{address.ToMacString()}: Trying to get Gatt services and characteristics.");
                 var gattServiceResult = await device.GetGattServicesAsync();
@@ -109,14 +102,29 @@ namespace LighthouseManager
 
                     if (characteristicsResult.Status == GattCommunicationStatus.Success)
                     {
+                        var powerstate = new Models.Characteristics.Powerstate();
+
                         var characteristic =
                             characteristicsResult.Characteristics.Single(c =>
-                                c.Uuid == Guid.Parse(_pwrCharacteristic));
+                                c.Uuid == powerstate.GetGuid());
                         try
                         {
-                            var writer = new DataWriter();
-                            writer.WriteByte(powerState == Powerstate.On ? PwrOn : PwrOff);
-                            var result = await characteristic.WriteValueWithResultAsync(writer.DetachBuffer());
+                            GattWriteResult result;
+
+                            switch (powerState)
+                            {
+                                case Powerstate.Wake:
+                                    result = await WriteAsync(characteristic, Models.Characteristics.Powerstate.Wake);
+                                    break;
+                                case Powerstate.Sleep:
+                                    result = await WriteAsync(characteristic, Models.Characteristics.Powerstate.Sleep);
+                                    break;
+                                case Powerstate.Standby:
+                                    result = await WriteAsync(characteristic, Models.Characteristics.Powerstate.Standby);
+                                    break;
+                                default:
+                                    throw new ArgumentOutOfRangeException(nameof(powerState), powerState, null);
+                            }
 
                             Console.WriteLine(
                                 result.Status == GattCommunicationStatus.Success
@@ -129,10 +137,16 @@ namespace LighthouseManager
                         }
                     }
                 }
-                
+
                 device.Dispose();
             }
+        }
 
+        private async Task<GattWriteResult> WriteAsync(GattCharacteristic characteristic, byte value)
+        {
+            var writer = new DataWriter();
+            writer.WriteByte(value);
+            return await characteristic.WriteValueWithResultAsync(writer.DetachBuffer());
         }
 
         public void Dispose()
