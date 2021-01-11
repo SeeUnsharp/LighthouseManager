@@ -13,6 +13,6 @@ With Command Promt or Powershell navigate to the location where LighthouseManage
 
 Functions / parameters:
 
--s Scan for Base Stations to get their MAC-Addresses.
--on -a|--addresses MAC_HERE,ANOTHERMAC_HERE Turn one or more Base Stations on
--off -a|--addresses MAC_HERE,ANOTHERMAC_HERE Turn one or more Base Stations off
+- -s Scan for Base Stations to get their MAC-Addresses.
+- -on -a|--addresses MAC_HERE,ANOTHERMAC_HERE Turn one or more Base Stations on
+- -off -a|--addresses MAC_HERE,ANOTHERMAC_HERE Turn one or more Base Stations off
