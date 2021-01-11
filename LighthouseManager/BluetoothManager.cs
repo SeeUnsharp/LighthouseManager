@@ -13,23 +13,23 @@ namespace LighthouseManager
     /// <summary>
     ///     Managing all Bluetooth related things
     /// </summary>
-    public class BluetoothManager
+    public class BluetoothManager : IDisposable
     {
         private readonly string _pwrService = "00001523-1212-efde-1523-785feabcd124";
         private readonly string _pwrCharacteristic = "00001525-1212-efde-1523-785feabcd124";
         private const int PwrOn = 0x01;
         private const int PwrOff = 0x00;
-        private readonly int _eDeviceNotAvailable = unchecked((int) 0x800710df);
+        private readonly int _eDeviceNotAvailable = unchecked((int)0x800710df);
         private BluetoothLEAdvertisementWatcher AdvertisementWatcher { get; set; }
-
-        public static List<ulong> Basestations { get; set; } = new();
+        private List<BluetoothLEDevice> BluetoothLeDevices { get; } = new();
+        private List<ulong> Basestations { get; } = new();
 
         /// <summary>
         ///     Initializing new BluetoothLEAdvertisementWatcher and listening for devices
         /// </summary>
         public void StartWatcher()
         {
-            AdvertisementWatcher = new BluetoothLEAdvertisementWatcher {ScanningMode = BluetoothLEScanningMode.Active};
+            AdvertisementWatcher = new BluetoothLEAdvertisementWatcher { ScanningMode = BluetoothLEScanningMode.Active };
             AdvertisementWatcher.Received += WatcherOnReceived;
 
             try
@@ -47,11 +47,15 @@ namespace LighthouseManager
         /// </summary>
         public void StopWatcher()
         {
-            AdvertisementWatcher.Stop();
+            if (AdvertisementWatcher.Status == BluetoothLEAdvertisementWatcherStatus.Started)
+            {
+                AdvertisementWatcher.Stop();
+            }
+
             Basestations.Clear();
         }
 
-        private static void WatcherOnReceived(BluetoothLEAdvertisementWatcher sender,
+        private void WatcherOnReceived(BluetoothLEAdvertisementWatcher sender,
             BluetoothLEAdvertisementReceivedEventArgs args)
         {
             // Filtering for basestations, should begin with "LHB-"
@@ -89,6 +93,11 @@ namespace LighthouseManager
 
             if (device != null)
             {
+                if (BluetoothLeDevices.All(x => x.BluetoothAddress != device.BluetoothAddress))
+                {
+                    BluetoothLeDevices.Add(device);
+                }
+
                 Console.WriteLine($"{address.ToMacString()}: Trying to get Gatt services and characteristics.");
                 var gattServiceResult = await device.GetGattServicesAsync();
 
@@ -120,9 +129,15 @@ namespace LighthouseManager
                         }
                     }
                 }
+                
+                device.Dispose();
             }
 
-            device?.Dispose();
+        }
+
+        public void Dispose()
+        {
+            BluetoothLeDevices.ForEach(x => x.Dispose());
         }
     }
 }

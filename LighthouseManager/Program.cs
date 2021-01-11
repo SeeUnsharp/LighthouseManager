@@ -11,6 +11,12 @@ namespace LighthouseManager
 
         private static void Main(string[] args)
         {
+            Console.CancelKeyPress += delegate
+            {
+                BluetoothManager.Dispose();
+                BluetoothManager.StopWatcher();
+            };
+
             FluentArgsBuilder.New()
                 .DefaultConfigsWithAppDescription("An app to manage SteamVR Lighthouse.")
                 .RegisterHelpFlag("-h", "--help")
