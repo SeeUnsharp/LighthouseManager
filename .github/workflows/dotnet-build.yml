@@ -23,4 +23,7 @@ jobs:
       uses: actions/upload-artifact@v2.2.2
       with:
         name: LighthouseManager-win10-64
-        path: LighthouseManager/bin/Release/*/win-x64/publish/*.exe
+        path: |
+          LighthouseManager/bin/Release/*/win-x64/publish/*.exe
+          SteamVRWatcher/bin/Release/net5.0/win-x64/publish/*.exe
+ 
