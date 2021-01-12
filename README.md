@@ -24,3 +24,8 @@ Based on success or not LighthouseManager will exit with different codes
 
 ## SteamVRWatcher
 SteamVRWatcher is a litte Command-Line tool that monitors SteamVR process (vrserver.exe) for starting or closing in a given interval (default 1000ms) and then starting LighthouseManager with corresponding parameters. You can configure interval, path to LighthouseManager.exe and base station MAC addresses in appsettings.json
+
+## Installation
+Just copy LighthouseManager.exe, SteamVRWatcher.exe and appsettings.json to a folder. Open appsettings.json and set your Base Station Mac Addresses (You can disover them with LighthouseManager `--discover` parameter).
+Then you can use Command-Line or Powershell to execute SteamVRWatcher.
+You can also start SteamVRWatcher automatically when Windows starts. To do so press WIN+R and type `shell:startup`. It should open the Autostart folder. Just paste a shortcut to SteamVRWatcher.exe there.
