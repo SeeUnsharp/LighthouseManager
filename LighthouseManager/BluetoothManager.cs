@@ -7,6 +7,8 @@ using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
 using Windows.Storage.Streams;
 using LighthouseManager.Helper;
+using LighthouseManager.Models.Characteristics;
+using Powerstate = LighthouseManager.Helper.Powerstate;
 
 namespace LighthouseManager
 {
@@ -22,6 +24,7 @@ namespace LighthouseManager
 
         public void Dispose()
         {
+            AdvertisementWatcher?.Stop();
             BluetoothLeDevices.ForEach(x => x.Dispose());
         }
 
@@ -76,11 +79,8 @@ namespace LighthouseManager
         /// <param name="powerState">Selected power state</param>
         public async Task ChangePowerstate(ulong address, Powerstate powerState)
         {
-            BluetoothLEDevice device = null;
-
-
             Console.WriteLine($"{address.ToMacString()}: Connecting to device.");
-            device = await BluetoothLEDevice.FromBluetoothAddressAsync(address);
+            var device = await BluetoothLEDevice.FromBluetoothAddressAsync(address);
 
             if (device == null) Console.WriteLine($"{address.ToMacString()}: Failed to connect to device.");
 
@@ -106,48 +106,57 @@ namespace LighthouseManager
                             characteristicsResult.Characteristics.Single(c =>
                                 c.Uuid == powerstate.GetGuid());
 
-                        GattWriteResult result;
-
+                        // Reading current state and break writing if state is already set
+                        var currentState = await ReadAsync(characteristic);
+                        GattWriteResult result = null;
                         switch (powerState)
                         {
                             case Powerstate.Wake:
-                                result = await WriteAsync(characteristic, Models.Characteristics.Powerstate.Wake);
+                                if (currentState.FirstOrDefault() == powerstate.PowerstateReadValues.AwakeLastSleeping ||
+                                    currentState.FirstOrDefault() == powerstate.PowerstateReadValues.AwakeLastStandby) break;
+                                result = await WriteAsync(characteristic, powerstate.PowerstateWriteValues.Wake);
                                 break;
                             case Powerstate.Sleep:
-                                result = await WriteAsync(characteristic, Models.Characteristics.Powerstate.Sleep);
+                                if (currentState.FirstOrDefault() == powerstate.PowerstateReadValues.Sleeping) break;
+                                result = await WriteAsync(characteristic, powerstate.PowerstateWriteValues.Sleep);
                                 break;
                             case Powerstate.Standby:
-                                result = await WriteAsync(characteristic,
-                                    Models.Characteristics.Powerstate.Standby);
+                                if (currentState.FirstOrDefault() == powerstate.PowerstateReadValues.Standby) break;
+                                result = await WriteAsync(characteristic, powerstate.PowerstateWriteValues.Standby);
                                 break;
                             default:
                                 throw new ArgumentOutOfRangeException(nameof(powerState), powerState, null);
                         }
 
-                        if (result.Status == GattCommunicationStatus.Success)
+                        if (result == null)
+                        {
+                            Console.WriteLine(
+                                $"{address.ToMacString()}: State already {powerState}.");
+                        }
+                        else if (result.Status == GattCommunicationStatus.Success)
                         {
                             Console.WriteLine(
                                 $"{address.ToMacString()}: Successfully executed '{powerState}' command.");
                         }
                         else
                         {
-                            Console.WriteLine($"{address.ToMacString()}: Execution failed: {result.Status}.");
                             device.Dispose();
-                            throw new GattCommunicationException($"{address.ToMacString()} WriteValueWithResultAsyncError",
+                            throw new GattCommunicationException(
+                                $"{address.ToMacString()}: WriteValueWithResultAsyncError",
                                 gattServiceResult.Status);
                         }
                     }
                     else
                     {
                         device.Dispose();
-                        throw new GattCommunicationException($"{address.ToMacString()} GetCharacteristicsAsyncError",
+                        throw new GattCommunicationException($"{address.ToMacString()}: GetCharacteristicsAsyncError",
                             gattServiceResult.Status);
                     }
                 }
                 else
                 {
                     device.Dispose();
-                    throw new GattCommunicationException($"{address.ToMacString()} GetGattServicesAsyncError",
+                    throw new GattCommunicationException($"{address.ToMacString()}: GetGattServicesAsyncError",
                         gattServiceResult.Status);
                 }
             }
@@ -160,6 +169,20 @@ namespace LighthouseManager
             var writer = new DataWriter();
             writer.WriteByte(value);
             return await characteristic.WriteValueWithResultAsync(writer.DetachBuffer());
+        }
+
+        private async Task<byte[]> ReadAsync(GattCharacteristic characteristic)
+        {
+            var result = await characteristic.ReadValueAsync();
+            if (result.Status == GattCommunicationStatus.Success)
+            {
+                var reader = DataReader.FromBuffer(result.Value);
+                var input = new byte[reader.UnconsumedBufferLength];
+                reader.ReadBytes(input);
+                return input;
+            }
+
+            return null;
         }
     }
 }

@@ -8,7 +8,7 @@ namespace LighthouseManager.Models.Characteristics
 {
     public class Identify : ICharacteristic
     {
-        public const int Identifing = 0x01;
+        public byte Identifing = 1;
 
         public Guid GetGuid()
         {

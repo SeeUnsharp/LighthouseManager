@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using FluentArgs;
 using LighthouseManager.Helper;
 using Polly;
@@ -14,11 +15,7 @@ namespace LighthouseManager
 
         private static void Main(string[] args)
         {
-            Console.CancelKeyPress += delegate
-            {
-                BluetoothManager.Dispose();
-                BluetoothManager.StopWatcher();
-            };
+            Console.CancelKeyPress += delegate { BluetoothManager.Dispose(); };
 
             FluentArgsBuilder.New()
                 .DefaultConfigsWithAppDescription("An app to manage SteamVR Lighthouse.")
@@ -45,13 +42,13 @@ namespace LighthouseManager
             Console.ReadLine();
         }
 
-        private static async void ChangePowerstate(IReadOnlyList<string> addresses, Powerstate powerstate)
+        private static async Task ChangePowerstate(IReadOnlyList<string> addresses, Powerstate powerstate)
         {
             var retryPolicy = Policy
                 .Handle<COMException>()
                 .Or<GattCommunicationException>()
-                .WaitAndRetryAsync(10, t => TimeSpan.FromSeconds(2),
-                    (ex, t, i, c) => { Console.WriteLine($"Failed, retrying {i}/10."); }
+                .WaitAndRetryAsync(10, t => TimeSpan.FromMilliseconds(500),
+                    (ex, t, i, c) => { Console.WriteLine($"{ex.Message}. Failed, retrying {i}/10."); }
                 );
 
             var baseStations = addresses.Select(g => g.ToMacUlong());
@@ -63,8 +60,11 @@ namespace LighthouseManager
                     await BluetoothManager.ChangePowerstate(baseStation, powerstate);
                 });
 
-                if (capture.Outcome == OutcomeType.Failure) Console.WriteLine($"{baseStation.ToMacString()} Failed to send command.");
+                if (capture.Outcome == OutcomeType.Failure)
+                    Console.WriteLine($"{baseStation.ToMacString()}: Failed to send command.");
             }
+            
+            Environment.Exit(0);
         }
     }
 }
