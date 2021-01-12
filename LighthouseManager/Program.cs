@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using FluentArgs;
 using LighthouseManager.Helper;
@@ -44,20 +45,31 @@ namespace LighthouseManager
 
         private static async void ChangePowerstate(IReadOnlyList<string> addresses, Powerstate powerstate)
         {
-            var retryPolicy = Policy
-                .Handle<COMException>()
-                .Or<GattCommunicationException>()
-                .WaitAndRetryAsync(10, t => TimeSpan.FromMilliseconds(500),
-                    (ex, t, i, c) => { Console.WriteLine($"{ex.Message}. Failed, retrying {i}/10."); });
+            var regex =
+                new Regex(
+                    "^(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}|(?:[0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}|(?:[0-9a-fA-F]{2}){5}[0-9a-fA-F]{2}$");
 
-            var baseStations = addresses.Select(g => g.ToMacUlong());
+            if (addresses.Any(x => !regex.IsMatch(x)))
+            {
+                Console.WriteLine("One or more addresses invalid.");
+            }
+            else
+            {
+                var retryPolicy = Policy
+                    .Handle<COMException>()
+                    .Or<GattCommunicationException>()
+                    .WaitAndRetryAsync(10, t => TimeSpan.FromMilliseconds(500),
+                        (ex, t, i, c) => { Console.WriteLine($"{ex.Message}. Failed, retrying {i}/10."); });
 
-            var tasks = baseStations.Select(baseStation =>
-                    retryPolicy.ExecuteAndCaptureAsync(() =>
-                        BluetoothManager.ChangePowerstate(baseStation, powerstate)))
-                .Cast<Task>().ToList();
+                var baseStations = addresses.Select(g => g.ToMacUlong());
 
-            await Task.WhenAll(tasks);
+                var tasks = baseStations.Select(baseStation =>
+                        retryPolicy.ExecuteAndCaptureAsync(() =>
+                            BluetoothManager.ChangePowerstate(baseStation, powerstate)))
+                    .Cast<Task>().ToList();
+
+                await Task.WhenAll(tasks);
+            }
 
             Environment.Exit(0);
         }
