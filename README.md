@@ -16,3 +16,11 @@ Functions / parameters:
 - `-d` or `--discover` Discover new Base Stations to get their MAC-Addresses.
 - `-w` or `--wake` `-a MAC_HERE,ANOTHERMAC_HERE` Wake one or more Base Stations
 - `-s` or `--sleep` `-a MAC_HERE,ANOTHERMAC_HERE` Sleep one or more Base Stations
+
+## Exit codes
+Based on success or not LighthouseManager will exit with different codes
+- `0` All commands executed successfully
+- `1` One or more commands failed after given retry attempt
+
+## SteamVRWatcher
+SteamVRWatcher is a litte Command-Line tool that monitors SteamVR process (vrserver.exe) for starting or closing in a given interval (default 1000ms) and then starting LighthouseManager with corresponding parameters. You can configure interval, path to LighthouseManager.exe and base station MAC addresses in appsettings.json
