@@ -42,28 +42,23 @@ namespace LighthouseManager
             Console.ReadLine();
         }
 
-        private static async Task ChangePowerstate(IReadOnlyList<string> addresses, Powerstate powerstate)
+        private static async void ChangePowerstate(IReadOnlyList<string> addresses, Powerstate powerstate)
         {
             var retryPolicy = Policy
                 .Handle<COMException>()
                 .Or<GattCommunicationException>()
                 .WaitAndRetryAsync(10, t => TimeSpan.FromMilliseconds(500),
-                    (ex, t, i, c) => { Console.WriteLine($"{ex.Message}. Failed, retrying {i}/10."); }
-                );
+                    (ex, t, i, c) => { Console.WriteLine($"{ex.Message}. Failed, retrying {i}/10."); });
 
             var baseStations = addresses.Select(g => g.ToMacUlong());
 
-            foreach (var baseStation in baseStations)
-            {
-                var capture = await retryPolicy.ExecuteAndCaptureAsync(async () =>
-                {
-                    await BluetoothManager.ChangePowerstate(baseStation, powerstate);
-                });
+            var tasks = baseStations.Select(baseStation =>
+                    retryPolicy.ExecuteAndCaptureAsync(() =>
+                        BluetoothManager.ChangePowerstate(baseStation, powerstate)))
+                .Cast<Task>().ToList();
 
-                if (capture.Outcome == OutcomeType.Failure)
-                    Console.WriteLine($"{baseStation.ToMacString()}: Failed to send command.");
-            }
-            
+            await Task.WhenAll(tasks);
+
             Environment.Exit(0);
         }
     }
