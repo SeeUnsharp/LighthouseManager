@@ -15,11 +15,15 @@ namespace LighthouseManager
     /// </summary>
     public class BluetoothManager : IDisposable
     {
-        private readonly int _eDeviceNotAvailable = unchecked((int) 0x800710df);
         private readonly string _pwrService = "00001523-1212-EFDE-1523-785FEABCD124";
         private BluetoothLEAdvertisementWatcher AdvertisementWatcher { get; set; }
         private List<BluetoothLEDevice> BluetoothLeDevices { get; } = new();
         private List<ulong> Basestations { get; } = new();
+
+        public void Dispose()
+        {
+            BluetoothLeDevices.ForEach(x => x.Dispose());
+        }
 
         /// <summary>
         ///     Initializing new BluetoothLEAdvertisementWatcher and listening for devices
@@ -70,21 +74,15 @@ namespace LighthouseManager
         /// </summary>
         /// <param name="address">Bluetooth-Addresse</param>
         /// <param name="powerState">Selected power state</param>
-        public async void ChangePowerstate(ulong address, Powerstate powerState)
+        public async Task ChangePowerstate(ulong address, Powerstate powerState)
         {
             BluetoothLEDevice device = null;
 
-            try
-            {
-                Console.WriteLine($"{address.ToMacString()}: Connecting to device.");
-                device = await BluetoothLEDevice.FromBluetoothAddressAsync(address);
 
-                if (device == null) Console.WriteLine($"{address.ToMacString()}: Failed to connect to device.");
-            }
-            catch (Exception ex) when (ex.HResult == _eDeviceNotAvailable)
-            {
-                Console.WriteLine("Bluetooth radio is not on.");
-            }
+            Console.WriteLine($"{address.ToMacString()}: Connecting to device.");
+            device = await BluetoothLEDevice.FromBluetoothAddressAsync(address);
+
+            if (device == null) Console.WriteLine($"{address.ToMacString()}: Failed to connect to device.");
 
             if (device != null)
             {
@@ -107,39 +105,54 @@ namespace LighthouseManager
                         var characteristic =
                             characteristicsResult.Characteristics.Single(c =>
                                 c.Uuid == powerstate.GetGuid());
-                        try
+
+                        GattWriteResult result;
+
+                        switch (powerState)
                         {
-                            GattWriteResult result;
-
-                            switch (powerState)
-                            {
-                                case Powerstate.Wake:
-                                    result = await WriteAsync(characteristic, Models.Characteristics.Powerstate.Wake);
-                                    break;
-                                case Powerstate.Sleep:
-                                    result = await WriteAsync(characteristic, Models.Characteristics.Powerstate.Sleep);
-                                    break;
-                                case Powerstate.Standby:
-                                    result = await WriteAsync(characteristic, Models.Characteristics.Powerstate.Standby);
-                                    break;
-                                default:
-                                    throw new ArgumentOutOfRangeException(nameof(powerState), powerState, null);
-                            }
-
-                            Console.WriteLine(
-                                result.Status == GattCommunicationStatus.Success
-                                    ? $"{address.ToMacString()}: Successfully executed '{powerState}' command."
-                                    : $"{address.ToMacString()}: Execution failed: {result.Status}.");
+                            case Powerstate.Wake:
+                                result = await WriteAsync(characteristic, Models.Characteristics.Powerstate.Wake);
+                                break;
+                            case Powerstate.Sleep:
+                                result = await WriteAsync(characteristic, Models.Characteristics.Powerstate.Sleep);
+                                break;
+                            case Powerstate.Standby:
+                                result = await WriteAsync(characteristic,
+                                    Models.Characteristics.Powerstate.Standby);
+                                break;
+                            default:
+                                throw new ArgumentOutOfRangeException(nameof(powerState), powerState, null);
                         }
-                        catch (Exception ex)
+
+                        if (result.Status == GattCommunicationStatus.Success)
                         {
-                            Console.WriteLine($"{address.ToMacString()}: {ex.Message}");
+                            Console.WriteLine(
+                                $"{address.ToMacString()}: Successfully executed '{powerState}' command.");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"{address.ToMacString()}: Execution failed: {result.Status}.");
+                            device.Dispose();
+                            throw new GattCommunicationException($"{address.ToMacString()} WriteValueWithResultAsyncError",
+                                gattServiceResult.Status);
                         }
                     }
+                    else
+                    {
+                        device.Dispose();
+                        throw new GattCommunicationException($"{address.ToMacString()} GetCharacteristicsAsyncError",
+                            gattServiceResult.Status);
+                    }
                 }
-
-                device.Dispose();
+                else
+                {
+                    device.Dispose();
+                    throw new GattCommunicationException($"{address.ToMacString()} GetGattServicesAsyncError",
+                        gattServiceResult.Status);
+                }
             }
+
+            device?.Dispose();
         }
 
         private async Task<GattWriteResult> WriteAsync(GattCharacteristic characteristic, byte value)
@@ -147,11 +160,6 @@ namespace LighthouseManager
             var writer = new DataWriter();
             writer.WriteByte(value);
             return await characteristic.WriteValueWithResultAsync(writer.DetachBuffer());
-        }
-
-        public void Dispose()
-        {
-            BluetoothLeDevices.ForEach(x => x.Dispose());
         }
     }
 }

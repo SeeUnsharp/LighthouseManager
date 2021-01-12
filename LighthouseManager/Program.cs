@@ -1,7 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using FluentArgs;
 using LighthouseManager.Helper;
+using Polly;
 
 namespace LighthouseManager
 {
@@ -20,38 +23,48 @@ namespace LighthouseManager
             FluentArgsBuilder.New()
                 .DefaultConfigsWithAppDescription("An app to manage SteamVR Lighthouse.")
                 .RegisterHelpFlag("-h", "--help")
-                .Given.Flag("-d", "--discover").Then(() =>
-                {
-                    BluetoothManager.StartWatcher();
-                })
+                .Given.Flag("-d", "--discover").Then(() => { BluetoothManager.StartWatcher(); })
                 .Given.Flag("-w", "--wake").Then(b => b
                     .ListParameter("-a", "--addresses")
                     .WithValidation(n => !string.IsNullOrWhiteSpace(n), "An address must not only contain whitespace.")
                     .WithDescription("Wakes up base station(s).")
-                    .WithExamples("'-w -a 00:11:22:33:FF:EE' or multiple addresses '-w -a 00:11:22:33:FF:EE,00:11:22:33:FF:EF'")
+                    .WithExamples(
+                        "'-w -a 00:11:22:33:FF:EE' or multiple addresses '-w -a 00:11:22:33:FF:EE,00:11:22:33:FF:EF'")
                     .IsRequired()
-                    .Call(addresses =>
-                    {
-                        var baseStations = addresses.Select(g => g.ToMacUlong());
-
-                        foreach (var baseStation in baseStations)
-                            BluetoothManager.ChangePowerstate(baseStation, Powerstate.Wake);
-                    }))
+                    .Call(addresses => { ChangePowerstate(addresses, Powerstate.Wake); }))
                 .Given.Flag("-s", "--sleep").Then(b => b
                     .ListParameter("-a", "--addresses")
                     .WithValidation(n => !string.IsNullOrWhiteSpace(n), "An address must not only contain whitespace.")
                     .WithDescription("Sleeps base station(s).")
-                    .WithExamples("'-s -a 00:11:22:33:FF:EE' or multiple addresses '-s -a 00:11:22:33:FF:EE,00:11:22:33:FF:EF'")
+                    .WithExamples(
+                        "'-s -a 00:11:22:33:FF:EE' or multiple addresses '-s -a 00:11:22:33:FF:EE,00:11:22:33:FF:EF'")
                     .IsRequired()
-                    .Call(addresses =>
-                    {
-                        var baseStations = addresses.Select(g => g.ToMacUlong());
-
-                        foreach (var baseStation in baseStations)
-                            BluetoothManager.ChangePowerstate(baseStation, Powerstate.Sleep);
-                    })).Invalid().Parse(args);
+                    .Call(addresses => { ChangePowerstate(addresses, Powerstate.Sleep); }))
+                .Invalid().Parse(args);
 
             Console.ReadLine();
+        }
+
+        private static async void ChangePowerstate(IReadOnlyList<string> addresses, Powerstate powerstate)
+        {
+            var retryPolicy = Policy
+                .Handle<COMException>()
+                .Or<GattCommunicationException>()
+                .WaitAndRetryAsync(10, t => TimeSpan.FromSeconds(2),
+                    (ex, t, i, c) => { Console.WriteLine($"Failed, retrying {i}/10."); }
+                );
+
+            var baseStations = addresses.Select(g => g.ToMacUlong());
+
+            foreach (var baseStation in baseStations)
+            {
+                var capture = await retryPolicy.ExecuteAndCaptureAsync(async () =>
+                {
+                    await BluetoothManager.ChangePowerstate(baseStation, powerstate);
+                });
+
+                if (capture.Outcome == OutcomeType.Failure) Console.WriteLine($"{baseStation.ToMacString()} Failed to send command.");
+            }
         }
     }
 }
