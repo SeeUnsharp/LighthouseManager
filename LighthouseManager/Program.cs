@@ -55,23 +55,32 @@ namespace LighthouseManager
             }
             else
             {
+                var retryCount = 10;
+
                 var retryPolicy = Policy
                     .Handle<COMException>()
                     .Or<GattCommunicationException>()
-                    .WaitAndRetryAsync(10, t => TimeSpan.FromMilliseconds(500),
-                        (ex, t, i, c) => { Console.WriteLine($"{ex.Message}. Failed, retrying {i}/10."); });
+                    .WaitAndRetryAsync(retryCount, t => TimeSpan.FromMilliseconds(500),
+                        (ex, t, i, c) => { Console.WriteLine($"{ex.Message}. Failed, retrying {i}/{retryCount}."); });
 
                 var baseStations = addresses.Select(g => g.ToMacUlong());
 
                 var tasks = baseStations.Select(baseStation =>
-                        retryPolicy.ExecuteAndCaptureAsync(() =>
-                            BluetoothManager.ChangePowerstate(baseStation, powerstate)))
-                    .Cast<Task>().ToList();
+                    retryPolicy.ExecuteAndCaptureAsync(() =>
+                        BluetoothManager.ChangePowerstate(baseStation, powerstate))).ToList();
 
-                await Task.WhenAll(tasks);
+                var policyResults = await Task.WhenAll(tasks);
+
+                if (policyResults.All(x => x.Outcome == OutcomeType.Successful))
+                {
+                    Environment.Exit(0);
+                }
+                else
+                {
+                    Console.WriteLine($"One or more tasks failed after {retryCount} retries.");
+                    Environment.Exit(1);
+                }
             }
-
-            Environment.Exit(0);
         }
     }
 }
