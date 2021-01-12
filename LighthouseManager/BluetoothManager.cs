@@ -7,8 +7,6 @@ using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
 using Windows.Storage.Streams;
 using LighthouseManager.Helper;
-using LighthouseManager.Models.Characteristics;
-using Powerstate = LighthouseManager.Helper.Powerstate;
 
 namespace LighthouseManager
 {
@@ -79,17 +77,19 @@ namespace LighthouseManager
         /// <param name="powerState">Selected power state</param>
         public async Task ChangePowerstate(ulong address, Powerstate powerState)
         {
-            Console.WriteLine($"{address.ToMacString()}: Connecting to device.");
+            var macAddress = address.ToMacString();
+
+            Console.WriteLine($"{macAddress}: Connecting to device.");
             var device = await BluetoothLEDevice.FromBluetoothAddressAsync(address);
 
-            if (device == null) Console.WriteLine($"{address.ToMacString()}: Failed to connect to device.");
+            if (device == null) Console.WriteLine($"{macAddress}: Failed to connect to device.");
 
             if (device != null)
             {
                 if (BluetoothLeDevices.All(x => x.BluetoothAddress != device.BluetoothAddress))
                     BluetoothLeDevices.Add(device);
 
-                Console.WriteLine($"{address.ToMacString()}: Trying to get Gatt services and characteristics.");
+                Console.WriteLine($"{macAddress}: Trying to get Gatt services and characteristics.");
                 var gattServiceResult = await device.GetGattServicesAsync();
 
                 if (gattServiceResult.Status == GattCommunicationStatus.Success)
@@ -112,8 +112,10 @@ namespace LighthouseManager
                         switch (powerState)
                         {
                             case Powerstate.Wake:
-                                if (currentState.FirstOrDefault() == powerstate.PowerstateReadValues.AwakeLastSleeping ||
-                                    currentState.FirstOrDefault() == powerstate.PowerstateReadValues.AwakeLastStandby) break;
+                                if (currentState.FirstOrDefault() ==
+                                    powerstate.PowerstateReadValues.AwakeLastSleeping ||
+                                    currentState.FirstOrDefault() == powerstate.PowerstateReadValues.AwakeLastStandby)
+                                    break;
                                 result = await WriteAsync(characteristic, powerstate.PowerstateWriteValues.Wake);
                                 break;
                             case Powerstate.Sleep:
@@ -131,7 +133,7 @@ namespace LighthouseManager
                         if (result == null)
                         {
                             Console.WriteLine(
-                                $"{address.ToMacString()}: State already {powerState}.");
+                                $"{macAddress}: State already {powerState}.");
                         }
                         else if (result.Status == GattCommunicationStatus.Success)
                         {
@@ -142,21 +144,21 @@ namespace LighthouseManager
                         {
                             device.Dispose();
                             throw new GattCommunicationException(
-                                $"{address.ToMacString()}: WriteValueWithResultAsyncError",
+                                $"{macAddress}: WriteValueWithResultAsyncError",
                                 gattServiceResult.Status);
                         }
                     }
                     else
                     {
                         device.Dispose();
-                        throw new GattCommunicationException($"{address.ToMacString()}: GetCharacteristicsAsyncError",
+                        throw new GattCommunicationException($"{macAddress}: GetCharacteristicsAsyncError",
                             gattServiceResult.Status);
                     }
                 }
                 else
                 {
                     device.Dispose();
-                    throw new GattCommunicationException($"{address.ToMacString()}: GetGattServicesAsyncError",
+                    throw new GattCommunicationException($"{macAddress}: GetGattServicesAsyncError",
                         gattServiceResult.Status);
                 }
             }
