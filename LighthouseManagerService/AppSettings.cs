@@ -9,7 +9,6 @@ namespace LighthouseManagerService
     public class AppSettings
     {
         public int Interval { get; set; }
-        public string LighthouseManagerPath { get; set; }
         public string BaseStationAddresses { get; set; }
     }
 }

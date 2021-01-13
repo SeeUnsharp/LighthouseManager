@@ -15,6 +15,7 @@ namespace LighthouseManagerService
         private static bool _started;
         private readonly ILogger<Worker> _logger;
         private readonly IOptions<AppSettings> _settings;
+        private string _lighthouseManagerPath;
 
 
         public Worker(ILogger<Worker> logger, IOptions<AppSettings> settings)
@@ -25,12 +26,16 @@ namespace LighthouseManagerService
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            if (!File.Exists(_settings.Value.LighthouseManagerPath))
+            _lighthouseManagerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LighthouseManager.exe");
+
+            if (!File.Exists(_lighthouseManagerPath))
             {
-                _logger.LogCritical($"{_settings.Value.LighthouseManagerPath} not found. Please check appsettings.json");
+                _logger.LogCritical(
+                    $"{_lighthouseManagerPath} not found. Please check appsettings.json");
                 return;
             }
 
+            _logger.LogInformation("Start listening for SteamVR events.");
             while (!stoppingToken.IsCancellationRequested)
             {
                 WatchForSteamVrProcess();
@@ -50,9 +55,10 @@ namespace LighthouseManagerService
             process.EnableRaisingEvents = true;
 
             _logger.LogInformation("SteamVR detected");
-            _logger.LogInformation("Starting LighthouseManager and wake base stations");
+            _logger.LogInformation(
+                $"Starting LighthouseManager and wake base stations: {_settings.Value.BaseStationAddresses}");
 
-            var lighthouseManagerProcess = Process.Start(_settings.Value.LighthouseManagerPath,
+            var lighthouseManagerProcess = Process.Start(_lighthouseManagerPath,
                 $"-w -a {_settings.Value.BaseStationAddresses}");
 
             process.Exited += delegate
@@ -62,8 +68,11 @@ namespace LighthouseManagerService
                     lighthouseManagerProcess.Kill();
 
                 _logger.LogInformation("SteamVR closed");
-                _logger.LogInformation("Starting LighthouseManager and sleep base stations");
-                Process.Start(_settings.Value.LighthouseManagerPath, $"-s -a {_settings.Value.BaseStationAddresses}");
+                _logger.LogInformation(
+                    $"Starting LighthouseManager and sleep base stations: {_settings.Value.BaseStationAddresses}");
+                lighthouseManagerProcess = Process.Start(_lighthouseManagerPath,
+                    $"-s -a {_settings.Value.BaseStationAddresses}");
+
                 _started = false;
             };
         }
