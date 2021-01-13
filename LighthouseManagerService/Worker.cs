@@ -33,7 +33,6 @@ namespace LighthouseManagerService
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
                 WatchForSteamVrProcess();
                 await Task.Delay(_settings.Value.Interval, stoppingToken);
             }
