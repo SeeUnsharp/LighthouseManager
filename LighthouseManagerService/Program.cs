@@ -1,10 +1,9 @@
+using System;
+using System.IO;
+using System.Reflection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using Serilog;
 using Serilog.Enrichers;
 using Serilog.Events;
@@ -16,7 +15,8 @@ namespace LighthouseManagerService
     {
         public static void Main(string[] args)
         {
-            const string loggerTemplate = @"{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u4}]<{ThreadId}> [{SourceContext:l}] {Message:lj}{NewLine}{Exception}";
+            const string loggerTemplate =
+                @"{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u4}]<{ThreadId}> [{SourceContext:l}] {Message:lj}{NewLine}{Exception}";
             var logfile = Path.Combine(Helper.GetBasePath(), "App_Data", "logs", "LighthouseManagerService.log");
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
@@ -30,7 +30,7 @@ namespace LighthouseManagerService
             try
             {
                 Log.Information("====================================================================");
-                Log.Information($"Application Starts. Version: {System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version}");
+                Log.Information($"Application Starts. Version: {Assembly.GetEntryAssembly()?.GetName().Version}");
                 Log.Information($"Application Directory: {AppDomain.CurrentDomain.BaseDirectory}");
                 CreateHostBuilder(args).Build().Run();
             }
@@ -45,14 +45,21 @@ namespace LighthouseManagerService
             }
         }
 
-        public static IHostBuilder CreateHostBuilder(string[] args) =>
-            Host.CreateDefaultBuilder(args)
+        public static IHostBuilder CreateHostBuilder(string[] args)
+        {
+            return Host.CreateDefaultBuilder(args)
                 .UseWindowsService()
+                .ConfigureAppConfiguration((context, config) =>
+                {
+                    config.SetBasePath(Helper.GetBasePath());
+                    config.AddJsonFile("appsettings.json", false);
+                })
                 .ConfigureServices((hostContext, services) =>
                 {
                     services.AddHostedService<Worker>();
                     services.Configure<AppSettings>(hostContext.Configuration.GetSection("AppSettings"));
                 })
                 .UseSerilog();
+        }
     }
 }
