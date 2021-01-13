@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,6 +25,12 @@ namespace LighthouseManagerService
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            if (!File.Exists(_settings.Value.LighthouseManagerPath))
+            {
+                _logger.LogCritical($"{_settings.Value.LighthouseManagerPath} not found. Please check appsettings.json");
+                return;
+            }
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
@@ -43,8 +50,8 @@ namespace LighthouseManagerService
 
             process.EnableRaisingEvents = true;
 
-            Console.WriteLine("SteamVR detected");
-            Console.WriteLine("Starting LighthouseManager and start base stations");
+            _logger.LogInformation("SteamVR detected");
+            _logger.LogInformation("Starting LighthouseManager and wake base stations");
 
             var lighthouseManagerProcess = Process.Start(_settings.Value.LighthouseManagerPath,
                 $"-w -a {_settings.Value.BaseStationAddresses}");
@@ -55,8 +62,8 @@ namespace LighthouseManagerService
                 if (lighthouseManagerProcess != null && !lighthouseManagerProcess.HasExited)
                     lighthouseManagerProcess.Kill();
 
-                Console.WriteLine("SteamVR closed");
-                Console.WriteLine("Starting LighthouseManager and stopping base stations");
+                _logger.LogInformation("SteamVR closed");
+                _logger.LogInformation("Starting LighthouseManager and sleep base stations");
                 Process.Start(_settings.Value.LighthouseManagerPath, $"-s -a {_settings.Value.BaseStationAddresses}");
                 _started = false;
             };
