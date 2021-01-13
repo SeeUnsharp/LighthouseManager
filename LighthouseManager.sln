@@ -5,7 +5,7 @@ VisualStudioVersion = 16.0.30804.86
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LighthouseManager", "LighthouseManager\LighthouseManager.csproj", "{5D59A117-8230-4954-B732-909C82EEF0D2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SteamVRWatcher", "SteamVRWatcher\SteamVRWatcher.csproj", "{833BFAAB-FB60-4728-A7B9-39D4E8437C7C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LighthouseManagerService", "LighthouseManagerService\LighthouseManagerService.csproj", "{9B148C67-7EE4-4363-8268-72A5EF10C12F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,10 +17,10 @@ Global
 		{5D59A117-8230-4954-B732-909C82EEF0D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5D59A117-8230-4954-B732-909C82EEF0D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5D59A117-8230-4954-B732-909C82EEF0D2}.Release|Any CPU.Build.0 = Release|Any CPU
-		{833BFAAB-FB60-4728-A7B9-39D4E8437C7C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{833BFAAB-FB60-4728-A7B9-39D4E8437C7C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{833BFAAB-FB60-4728-A7B9-39D4E8437C7C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{833BFAAB-FB60-4728-A7B9-39D4E8437C7C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9B148C67-7EE4-4363-8268-72A5EF10C12F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9B148C67-7EE4-4363-8268-72A5EF10C12F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9B148C67-7EE4-4363-8268-72A5EF10C12F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9B148C67-7EE4-4363-8268-72A5EF10C12F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
