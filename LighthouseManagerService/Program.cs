@@ -17,8 +17,7 @@ namespace LighthouseManagerService
         public static void Main(string[] args)
         {
             const string loggerTemplate = @"{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u4}]<{ThreadId}> [{SourceContext:l}] {Message:lj}{NewLine}{Exception}";
-            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            var logfile = Path.Combine(baseDir, "App_Data", "logs", "LighthouseManagerService.log");
+            var logfile = Path.Combine(Helper.GetBasePath(), "App_Data", "logs", "LighthouseManagerService.log");
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
                 .Enrich.With(new ThreadIdEnricher())
