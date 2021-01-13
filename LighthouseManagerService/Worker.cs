@@ -23,7 +23,7 @@ namespace LighthouseManagerService
             _logger = logger;
             _settings = settings;
 
-            _lighthouseManagerPath = Path.Combine(Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName), "LighthouseManager.exe");
+            _lighthouseManagerPath = Path.Combine(Helper.GetBasePath(), "LighthouseManager.exe");
             _logger.LogInformation("LighthouseManager location: " + _lighthouseManagerPath);
         }
 
