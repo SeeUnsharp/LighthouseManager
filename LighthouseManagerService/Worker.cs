@@ -22,16 +22,17 @@ namespace LighthouseManagerService
         {
             _logger = logger;
             _settings = settings;
+
+            _lighthouseManagerPath = Path.Combine(Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName), "LighthouseManager.exe");
+            _logger.LogInformation("LighthouseManager location: " + _lighthouseManagerPath);
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _lighthouseManagerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LighthouseManager.exe");
-
             if (!File.Exists(_lighthouseManagerPath))
             {
                 _logger.LogCritical(
-                    $"{_lighthouseManagerPath} not found. Please check appsettings.json");
+                    $"{_lighthouseManagerPath} not found.");
                 return;
             }
 
