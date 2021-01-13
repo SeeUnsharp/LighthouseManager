@@ -25,6 +25,6 @@ jobs:
         name: LighthouseManager-win10-64
         path: |
           Release/LighthouseManager.exe
-          Release/SteamVRWatcher.exe
+          Release/LighthouseManagerService.exe
           Release/appsettings.json
  
