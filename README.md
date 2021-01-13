@@ -23,10 +23,10 @@ Based on success or not LighthouseManager will exit with different codes
 - `1` One or more commands failed after given retry attempt
 
 # LighthouseManagerService
-LighthouseManagerService is a litte tool (Windows Worker Service) that monitors SteamVR process (vrserver.exe) for starting or closing in a given interval (default 1000ms) and then starting LighthouseManager with corresponding parameters. You can configure interval and base station MAC addresses in appsettings.json.
+LighthouseManagerService is a litte tool (Windows Worker Service) that monitors SteamVR process (vrserver.exe) for starting or closing in a given interval (default 1000ms) and then starting LighthouseManager with corresponding parameters. You can configure interval (minimum 1000 milliseconds) and base station MAC addresses in appsettings.json.
 Open appsettings.json and set your Base Station Mac Addresses (You can disover them with LighthouseManager `--discover` parameter).
 It is possible to just run LighthouseManagerService or use it as a Windows Service (recommended).
 
 
 ## Installation as Windows Service
-Open a Command Prompt as Administrator and type `create LighthouseManager DisplayName="LighthouseManager" binPath="C:\PATHTOEXTRACTEDFILES\LighthouseManagerService.exe"` to create the Windows Service and then `sc start LighthouseManager` to start it. You can uninstall it with `sc delete LighthouseManager` (If you want stop it before uninstalling with `sc stop LighthouseManager`).
+Open a Command Prompt as Administrator and type `sc create LighthouseManager DisplayName="LighthouseManager" binPath="C:\PATHTOEXTRACTEDFILES\LighthouseManagerService.exe"` to create the Windows Service and then `sc start LighthouseManager` to start it. You can uninstall it with `sc delete LighthouseManager` (If you want stop it before uninstalling with `sc stop LighthouseManager`).
