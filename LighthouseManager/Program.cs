@@ -60,6 +60,8 @@ namespace LighthouseManager
                 var retryPolicy = Policy
                     .Handle<COMException>()
                     .Or<GattCommunicationException>()
+                    .Or<InvalidOperationException>()
+                    .Or<BluetoothConnectionException>()
                     .WaitAndRetryAsync(retryCount, t => TimeSpan.FromMilliseconds(500),
                         (ex, t, i, c) => { Console.WriteLine($"{ex.Message}. Failed, retrying {i}/{retryCount}."); });
 
