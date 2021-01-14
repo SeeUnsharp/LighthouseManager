@@ -79,91 +79,76 @@ namespace LighthouseManager
         {
             var macAddress = address.ToMacString();
 
-            Console.WriteLine($"{macAddress}: Connecting to device.");
-            var device = await BluetoothLEDevice.FromBluetoothAddressAsync(address);
+            var foundConnectedDevice = BluetoothLeDevices.FirstOrDefault(x =>
+                x.BluetoothAddress == address && x.ConnectionStatus == BluetoothConnectionStatus.Connected);
 
-            if (device == null) Console.WriteLine($"{macAddress}: Failed to connect to device.");
+            BluetoothLEDevice device;
 
-            if (device != null)
+            if (foundConnectedDevice != null)
             {
-                if (BluetoothLeDevices.All(x => x.BluetoothAddress != device.BluetoothAddress))
-                    BluetoothLeDevices.Add(device);
-
-                Console.WriteLine($"{macAddress}: Trying to get Gatt services and characteristics.");
-                var gattServiceResult = await device.GetGattServicesAsync();
-
-                if (gattServiceResult.Status == GattCommunicationStatus.Success)
+                device = foundConnectedDevice;
+            }
+            else
+            {
+                Console.WriteLine($"{macAddress}: Connecting to device.");
+                device = await BluetoothLEDevice.FromBluetoothAddressAsync(address);
+                if (device == null)
                 {
-                    var characteristicsResult = await gattServiceResult.Services
-                        .Single(s => s.Uuid == Guid.Parse(_pwrService))
-                        .GetCharacteristicsAsync();
-
-                    if (characteristicsResult.Status == GattCommunicationStatus.Success)
-                    {
-                        var powerstate = new Models.Characteristics.Powerstate();
-
-                        var characteristic =
-                            characteristicsResult.Characteristics.Single(c =>
-                                c.Uuid == powerstate.GetGuid());
-
-                        // Reading current state and break writing if state is already set
-                        var currentState = await ReadAsync(characteristic);
-                        GattWriteResult result = null;
-                        switch (powerState)
-                        {
-                            case Powerstate.Wake:
-                                if (currentState.FirstOrDefault() ==
-                                    powerstate.PowerstateReadValues.AwakeLastSleeping ||
-                                    currentState.FirstOrDefault() == powerstate.PowerstateReadValues.AwakeLastStandby)
-                                    break;
-                                result = await WriteAsync(characteristic, powerstate.PowerstateWriteValues.Wake);
-                                break;
-                            case Powerstate.Sleep:
-                                if (currentState.FirstOrDefault() == powerstate.PowerstateReadValues.Sleeping) break;
-                                result = await WriteAsync(characteristic, powerstate.PowerstateWriteValues.Sleep);
-                                break;
-                            case Powerstate.Standby:
-                                if (currentState.FirstOrDefault() == powerstate.PowerstateReadValues.Standby) break;
-                                result = await WriteAsync(characteristic, powerstate.PowerstateWriteValues.Standby);
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException(nameof(powerState), powerState, null);
-                        }
-
-                        if (result == null)
-                        {
-                            Console.WriteLine(
-                                $"{macAddress}: State already {powerState}.");
-                        }
-                        else if (result.Status == GattCommunicationStatus.Success)
-                        {
-                            Console.WriteLine(
-                                $"{address.ToMacString()}: Successfully executed '{powerState}' command.");
-                        }
-                        else
-                        {
-                            device.Dispose();
-                            throw new GattCommunicationException(
-                                $"{macAddress}: WriteValueWithResultAsyncError",
-                                gattServiceResult.Status);
-                        }
-                    }
-                    else
-                    {
-                        device.Dispose();
-                        throw new GattCommunicationException($"{macAddress}: GetCharacteristicsAsyncError",
-                            gattServiceResult.Status);
-                    }
-                }
-                else
-                {
-                    device.Dispose();
-                    throw new GattCommunicationException($"{macAddress}: GetGattServicesAsyncError",
-                        gattServiceResult.Status);
+                    Console.WriteLine($"{macAddress}: Failed to connect to device.");
+                    throw new Exception("Failed to connect to device.");
                 }
             }
 
-            device?.Dispose();
+            if (BluetoothLeDevices.All(x => x.BluetoothAddress != device.BluetoothAddress))
+                BluetoothLeDevices.Add(device);
+
+            var powerstate = new Models.Characteristics.Powerstate();
+
+            var service = await GattDeviceService.FromIdAsync(device.DeviceId);
+            var characteristicResult = await service.GetCharacteristicsForUuidAsync(powerstate.GetGuid());
+            var characteristic = characteristicResult.Characteristics.First();
+
+            // Reading current state and break writing if state is already set
+            var currentState = await ReadAsync(characteristic);
+            GattWriteResult writeResult = null;
+            switch (powerState)
+            {
+                case Powerstate.Wake:
+                    if (currentState.FirstOrDefault() == powerstate.PowerstateReadValues.AwakeLastSleeping ||
+                        currentState.FirstOrDefault() == powerstate.PowerstateReadValues.AwakeLastStandby)
+                        writeResult = await WriteAsync(characteristic, powerstate.PowerstateWriteValues.Wake);
+                    break;
+                case Powerstate.Sleep:
+                    if (currentState.FirstOrDefault() == powerstate.PowerstateReadValues.Sleeping) break;
+                    writeResult = await WriteAsync(characteristic, powerstate.PowerstateWriteValues.Sleep);
+                    break;
+                case Powerstate.Standby:
+                    if (currentState.FirstOrDefault() == powerstate.PowerstateReadValues.Standby) break;
+                    writeResult = await WriteAsync(characteristic, powerstate.PowerstateWriteValues.Standby);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(powerState), powerState, null);
+            }
+
+            if (writeResult == null)
+            {
+                Console.WriteLine(
+                    $"{macAddress}: State already {powerState}.");
+            }
+            else if (writeResult.Status == GattCommunicationStatus.Success)
+            {
+                Console.WriteLine(
+                    $"{address.ToMacString()}: Successfully executed '{powerState}' command.");
+            }
+            else
+            {
+                device.Dispose();
+                throw new GattCommunicationException(
+                    $"{macAddress}: WriteValueWithResultAsyncError",
+                    writeResult.Status);
+            }
+
+            device.Dispose();
         }
 
         private async Task<GattWriteResult> WriteAsync(GattCharacteristic characteristic, byte value)
