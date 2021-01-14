@@ -13,4 +13,13 @@ namespace LighthouseManager.Helper
 
         public GattCommunicationStatus Status { get; }
     }
+
+    public class BluetoothConnectionException : Exception
+    {
+        public BluetoothConnectionException(string message)
+            : base(message)
+        {
+            
+        }
+    }
 }
