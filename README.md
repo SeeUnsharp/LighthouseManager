@@ -32,6 +32,6 @@ It is possible to just run LighthouseManagerService or use it as a Windows Servi
 Open a Command Prompt as Administrator and type `sc create LighthouseManager DisplayName="LighthouseManager" binPath="C:\PATHTOEXTRACTEDFILES\LighthouseManagerService.exe"` to create the Windows Service and then `sc start LighthouseManager` to start it. You can uninstall it with `sc delete LighthouseManager` (If you want stop it before uninstalling with `sc stop LighthouseManager`).
 
 # Acknowledgements
-(Rossbearman)[https://github.com/rossbearman] for helping me with some Bluetooth LE perfomance problems in Windows BLE API.
-(BenWoodford)[https://gist.github.com/BenWoodford] for (this)[https://gist.github.com/BenWoodford/3a1e500a4ea2673525f5adb4120fd47c] awesome Lighthouse 2.0 GATT documentation.
+[Rossbearman](https://github.com/rossbearman) for helping me with some Bluetooth LE perfomance problems in Windows BLE API.
+[BenWoodford](https://gist.github.com/BenWoodford) for [this](https://gist.github.com/BenWoodford/3a1e500a4ea2673525f5adb4120fd47c) awesome Lighthouse 2.0 GATT documentation.
 
