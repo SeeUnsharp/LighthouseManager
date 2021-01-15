@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using LighthouseManager.Shared;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -39,7 +40,7 @@ namespace LighthouseManagerService
 
             if (_settings.Value.Interval < 1000)
             {
-                _logger.LogCritical("Interval lower than 1000 milliseconds is not allowed");
+                _logger.LogError("Interval lower than 1000 milliseconds is not allowed");
                 return;
             }
 
