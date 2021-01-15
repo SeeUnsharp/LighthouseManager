@@ -7,24 +7,26 @@ using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
 using Windows.Storage.Streams;
 using LighthouseManager.Helper;
+using Microsoft.Extensions.Logging;
 
 namespace LighthouseManager
 {
     /// <summary>
     ///     Managing all Bluetooth related things
     /// </summary>
-    public class BluetoothManager : IDisposable
+    public class BluetoothManager : IBluetoothManager
     {
+        private readonly ILogger<BluetoothManager> _logger;
         private readonly string _pwrService = "00001523-1212-EFDE-1523-785FEABCD124";
+
+        public BluetoothManager(ILogger<BluetoothManager> logger)
+        {
+            _logger = logger;
+        }
+
         private BluetoothLEAdvertisementWatcher AdvertisementWatcher { get; set; }
         private List<BluetoothLEDevice> BluetoothLeDevices { get; } = new();
         private List<ulong> Basestations { get; } = new();
-
-        public void Dispose()
-        {
-            AdvertisementWatcher?.Stop();
-            BluetoothLeDevices.ForEach(x => x.Dispose());
-        }
 
         /// <summary>
         ///     Initializing new BluetoothLEAdvertisementWatcher and listening for devices
@@ -40,7 +42,7 @@ namespace LighthouseManager
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                _logger.LogError(ex.Message);
             }
         }
 
@@ -55,21 +57,6 @@ namespace LighthouseManager
             Basestations.Clear();
         }
 
-        private void WatcherOnReceived(BluetoothLEAdvertisementWatcher sender,
-            BluetoothLEAdvertisementReceivedEventArgs args)
-        {
-            // Filtering for basestations, should begin with "LHB-"
-            if (!args.Advertisement.LocalName.StartsWith("LHB-")) return;
-
-            if (Basestations.All(x => x != args.BluetoothAddress))
-            {
-                Basestations.Add(args.BluetoothAddress);
-
-                Console.WriteLine(
-                    $"Potential Base Station found. Name: {args.Advertisement.LocalName}, Bluetooth Address: {args.BluetoothAddress.ToMacString()}.");
-            }
-        }
-
         /// <summary>
         ///     Changing the power state of given basestation addresses
         /// </summary>
@@ -82,13 +69,15 @@ namespace LighthouseManager
 
             try
             {
-                Console.WriteLine($"{macAddress}: Connecting to device.");
+                _logger.LogInformation($"{macAddress}: Connecting to device.");
                 device = await BluetoothLEDevice.FromBluetoothAddressAsync(address);
                 if (device == null)
                 {
-                    Console.WriteLine($"{macAddress}: Failed to connect to device.");
+                    _logger.LogError($"{macAddress}: Failed to connect to device.");
                     throw new BluetoothConnectionException("Failed to connect to device.");
                 }
+
+                _logger.LogInformation($"{macAddress}: Connected.");
 
                 if (BluetoothLeDevices.All(x => x.BluetoothAddress != device.BluetoothAddress))
                     BluetoothLeDevices.Add(device);
@@ -124,30 +113,48 @@ namespace LighthouseManager
 
                 if (writeResult == null)
                 {
-                    Console.WriteLine(
+                    _logger.LogInformation(
                         $"{macAddress}: State already {powerState}.");
                 }
                 else if (writeResult.Status == GattCommunicationStatus.Success)
                 {
-                    Console.WriteLine(
+                    _logger.LogInformation(
                         $"{address.ToMacString()}: Successfully executed '{powerState}' command.");
                 }
                 else
                 {
                     device.Dispose();
-                    throw new GattCommunicationException(
+
+                    var ex = new GattCommunicationException(
                         $"{macAddress}: WriteValueWithResultAsyncError",
                         writeResult.Status);
+                    _logger.LogError(ex.Message);
+                    throw ex;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"{address.ToMacString()}: {ex.Message}");
+                _logger.LogError($"{address.ToMacString()}: {ex.Message}");
                 throw;
             }
             finally
             {
                 device?.Dispose();
+            }
+        }
+
+        private void WatcherOnReceived(BluetoothLEAdvertisementWatcher sender,
+            BluetoothLEAdvertisementReceivedEventArgs args)
+        {
+            // Filtering for basestations, should begin with "LHB-"
+            if (!args.Advertisement.LocalName.StartsWith("LHB-")) return;
+
+            if (Basestations.All(x => x != args.BluetoothAddress))
+            {
+                Basestations.Add(args.BluetoothAddress);
+
+                _logger.LogInformation(
+                    $"Potential Base Station found. Name: {args.Advertisement.LocalName}, Bluetooth Address: {args.BluetoothAddress.ToMacString()}.");
             }
         }
 

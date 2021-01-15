@@ -1,88 +1,63 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
+using System.IO;
+using System.Reflection;
 using System.Threading.Tasks;
-using FluentArgs;
-using LighthouseManager.Helper;
-using Polly;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Serilog;
+using Serilog.Enrichers;
+using Serilog.Events;
+using Serilog.Sinks.SystemConsole.Themes;
 
 namespace LighthouseManager
 {
     internal class Program
     {
-        public static BluetoothManager BluetoothManager { get; set; } = new();
-
-        private static void Main(string[] args)
+        private static async Task Main(string[] args)
         {
-            Console.CancelKeyPress += delegate { BluetoothManager.Dispose(); };
+            const string loggerTemplate =
+                @"{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u4}]<{ThreadId}> [{SourceContext:l}] {Message:lj}{NewLine}{Exception}";
+            var logfile = Path.Combine(Shared.Helper.GetBasePath(), "App_Data", "logs", "LighthouseManager.log");
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+                .Enrich.With(new ThreadIdEnricher())
+                .Enrich.FromLogContext()
+                .WriteTo.Console(LogEventLevel.Information, loggerTemplate, theme: AnsiConsoleTheme.Literate)
+                .WriteTo.File(logfile, LogEventLevel.Information, loggerTemplate,
+                    rollingInterval: RollingInterval.Day, retainedFileCountLimit: 90)
+                .CreateLogger();
 
-            FluentArgsBuilder.New()
-                .DefaultConfigsWithAppDescription("An app to manage SteamVR Lighthouse.")
-                .RegisterHelpFlag("-h", "--help")
-                .Given.Flag("-d", "--discover").Then(() => { BluetoothManager.StartWatcher(); })
-                .Given.Flag("-w", "--wake").Then(b => b
-                    .ListParameter("-a", "--addresses")
-                    .WithValidation(n => !string.IsNullOrWhiteSpace(n), "An address must not only contain whitespace.")
-                    .WithDescription("Wakes up base station(s).")
-                    .WithExamples(
-                        "'-w -a 00:11:22:33:FF:EE' or multiple addresses '-w -a 00:11:22:33:FF:EE,00:11:22:33:FF:EF'")
-                    .IsRequired()
-                    .Call(addresses => { ChangePowerstate(addresses, Powerstate.Wake); }))
-                .Given.Flag("-s", "--sleep").Then(b => b
-                    .ListParameter("-a", "--addresses")
-                    .WithValidation(n => !string.IsNullOrWhiteSpace(n), "An address must not only contain whitespace.")
-                    .WithDescription("Sleeps base station(s).")
-                    .WithExamples(
-                        "'-s -a 00:11:22:33:FF:EE' or multiple addresses '-s -a 00:11:22:33:FF:EE,00:11:22:33:FF:EF'")
-                    .IsRequired()
-                    .Call(addresses => { ChangePowerstate(addresses, Powerstate.Sleep); }))
-                .Invalid().Parse(args);
-
-            Console.ReadLine();
+            try
+            {
+                Log.Information("====================================================================");
+                Log.Information($"Application Starts. Version: {Assembly.GetEntryAssembly()?.GetName().Version}");
+                Log.Information($"Application Directory: {AppDomain.CurrentDomain.BaseDirectory}");
+                await CreateHostBuilder(args);
+            }
+            catch (Exception e)
+            {
+                Log.Fatal(e, "Application terminated unexpectedly");
+            }
+            finally
+            {
+                Log.Information("====================================================================\r\n");
+                Log.CloseAndFlush();
+            }
         }
 
-        private static async void ChangePowerstate(IReadOnlyList<string> addresses, Powerstate powerstate)
+        public static async Task CreateHostBuilder(string[] args)
         {
-            var regex =
-                new Regex(
-                    "^(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}|(?:[0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}|(?:[0-9a-fA-F]{2}){5}[0-9a-fA-F]{2}$");
-
-            if (addresses.Any(x => !regex.IsMatch(x)))
-            {
-                Console.WriteLine("One or more addresses invalid.");
-            }
-            else
-            {
-                var retryCount = 10;
-
-                var retryPolicy = Policy
-                    .Handle<COMException>()
-                    .Or<GattCommunicationException>()
-                    .Or<InvalidOperationException>()
-                    .Or<BluetoothConnectionException>()
-                    .WaitAndRetryAsync(retryCount, t => TimeSpan.FromMilliseconds(500),
-                        (ex, t, i, c) => { Console.WriteLine($"{ex.Message}. Failed, retrying {i}/{retryCount}."); });
-
-                var baseStations = addresses.Select(g => g.ToMacUlong());
-
-                var tasks = baseStations.Select(baseStation =>
-                    retryPolicy.ExecuteAndCaptureAsync(() =>
-                        BluetoothManager.ChangePowerstate(baseStation, powerstate))).ToList();
-
-                var policyResults = await Task.WhenAll(tasks);
-
-                if (policyResults.All(x => x.Outcome == OutcomeType.Successful))
+            await Host.CreateDefaultBuilder(args)
+                .ConfigureAppConfiguration((context, config) => { config.SetBasePath(Shared.Helper.GetBasePath()); })
+                .ConfigureServices((hostContext, services) =>
                 {
-                    Environment.Exit(0);
-                }
-                else
-                {
-                    Console.WriteLine($"One or more tasks failed after {retryCount} retries.");
-                    Environment.Exit(1);
-                }
-            }
+                    services
+                        .AddHostedService<ConsoleHostedService>()
+                        .AddSingleton<IBluetoothManager, BluetoothManager>();
+                })
+                .UseSerilog()
+                .RunConsoleAsync();
         }
     }
 }
