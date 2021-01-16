@@ -17,5 +17,14 @@ namespace LighthouseManager.Helper
             var replace = "$1:$2:$3:$4:$5:$6";
             return Regex.Replace(macAddress.ToString("X"), regex, replace);
         }
+
+        public static bool IsValidAddress(this string address)
+        {
+            var regex =
+                new Regex(
+                    "^(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}|(?:[0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}|(?:[0-9a-fA-F]{2}){5}[0-9a-fA-F]{2}$");
+
+            return regex.IsMatch(address);
+        }
     }
 }

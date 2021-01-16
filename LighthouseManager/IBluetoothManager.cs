@@ -14,5 +14,7 @@ namespace LighthouseManager
         void StopWatcher();
 
         Task ChangePowerstate(ulong address, Powerstate powerState);
+
+        Task Identify(ulong address);
     }
 }
