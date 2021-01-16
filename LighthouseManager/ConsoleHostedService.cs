@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentArgs;
@@ -10,7 +9,6 @@ using LighthouseManager.Helper;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Polly;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace LighthouseManager
 {
@@ -43,6 +41,14 @@ namespace LighthouseManager
                         .DefaultConfigsWithAppDescription("An app to manage SteamVR Lighthouse.")
                         .RegisterHelpFlag("-h", "--help")
                         .Given.Flag("-d", "--discover").Then(() => { _bluetoothManager.StartWatcher(); })
+                        .Given.Flag("-i", "--identify").Then(b => b
+                            .Parameter("-a", "--address")
+                            .WithValidation(n => !string.IsNullOrWhiteSpace(n),
+                                "An address must not only contain whitespace.")
+                            .WithDescription("Identifies a base station.")
+                            .WithExamples("'-i 00:11:22:33:FF:EE'")
+                            .IsRequired()
+                            .Call(address => Identify(address)))
                         .Given.Flag("-w", "--wake").Then(b => b
                             .ListParameter("-a", "--addresses")
                             .WithValidation(n => !string.IsNullOrWhiteSpace(n),
@@ -76,27 +82,52 @@ namespace LighthouseManager
             return Task.CompletedTask;
         }
 
-        private async void ChangePowerstate(IReadOnlyList<string> addresses, Powerstate powerstate)
+        private async void Identify(string address, int retries = 10)
         {
-            var regex =
-                new Regex(
-                    "^(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}|(?:[0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}|(?:[0-9a-fA-F]{2}){5}[0-9a-fA-F]{2}$");
-
-            if (addresses.Any(x => !regex.IsMatch(x)))
+            if (!address.IsValidAddress())
             {
-                Console.WriteLine("One or more addresses invalid.");
+                _logger.LogError("One or more addresses invalid.");
             }
             else
             {
-                var retryCount = 10;
+                var retryPolicy = await Policy
+                    .Handle<COMException>()
+                    .Or<GattCommunicationException>()
+                    .Or<InvalidOperationException>()
+                    .Or<BluetoothConnectionException>()
+                    .WaitAndRetryAsync(retries, t => TimeSpan.FromMilliseconds(500),
+                        (ex, t, i, c) => { _logger.LogError($"Retrying {i}/{retries}."); })
+                    .ExecuteAndCaptureAsync(async () => await _bluetoothManager.Identify(address.ToMacUlong()));
 
+                if (retryPolicy.Outcome == OutcomeType.Successful)
+                {
+                    _exitCode = 0;
+                }
+                else
+                {
+                    _logger.LogError($"Task failed after {retries} retries.");
+                    _exitCode = 1;
+                }
+
+                _appLifetime.StopApplication();
+            }
+        }
+
+        private async void ChangePowerstate(IReadOnlyList<string> addresses, Powerstate powerstate, int retries = 10)
+        {
+            if (!addresses.Any(x => x.IsValidAddress()))
+            {
+                _logger.LogError("One or more addresses invalid.");
+            }
+            else
+            {
                 var retryPolicy = Policy
                     .Handle<COMException>()
                     .Or<GattCommunicationException>()
                     .Or<InvalidOperationException>()
                     .Or<BluetoothConnectionException>()
-                    .WaitAndRetryAsync(retryCount, t => TimeSpan.FromMilliseconds(500),
-                        (ex, t, i, c) => { _logger.LogError($"Retrying {i}/{retryCount}."); });
+                    .WaitAndRetryAsync(retries, t => TimeSpan.FromMilliseconds(500),
+                        (ex, t, i, c) => { _logger.LogError($"Retrying {i}/{retries}."); });
 
                 var baseStations = addresses.Select(g => g.ToMacUlong());
 
@@ -112,7 +143,7 @@ namespace LighthouseManager
                 }
                 else
                 {
-                    _logger.LogError($"One or more tasks failed after {retryCount} retries.");
+                    _logger.LogError($"One or more tasks failed after {retries} retries.");
                     _exitCode = 1;
                 }
 
