@@ -7,7 +7,9 @@ using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
 using Windows.Storage.Streams;
 using LighthouseManager.Helper;
+using LighthouseManager.Models.Characteristics;
 using Microsoft.Extensions.Logging;
+using Powerstate = LighthouseManager.Helper.Powerstate;
 
 namespace LighthouseManager
 {
@@ -69,22 +71,14 @@ namespace LighthouseManager
 
             try
             {
-                _logger.LogInformation($"{macAddress}: Connecting to device.");
-                device = await BluetoothLEDevice.FromBluetoothAddressAsync(address);
-                if (device == null)
-                {
-                    _logger.LogError($"{macAddress}: Failed to connect to device.");
-                    throw new BluetoothConnectionException("Failed to connect to device.");
-                }
-
-                _logger.LogInformation($"{macAddress}: Connected.");
+                device = await Connect(address);
 
                 if (BluetoothLeDevices.All(x => x.BluetoothAddress != device.BluetoothAddress))
                     BluetoothLeDevices.Add(device);
 
-                var powerstate = new Models.Characteristics.Powerstate();
 
                 var service = await device.GetGattServicesForUuidAsync(Guid.Parse(_pwrService));
+                var powerstate = new Models.Characteristics.Powerstate();
                 var characteristicResult =
                     await service.Services.Single().GetCharacteristicsForUuidAsync(powerstate.GetGuid());
                 var characteristic = characteristicResult.Characteristics.Single();
@@ -123,8 +117,6 @@ namespace LighthouseManager
                 }
                 else
                 {
-                    device.Dispose();
-
                     var ex = new GattCommunicationException(
                         $"{macAddress}: WriteValueWithResultAsyncError",
                         writeResult.Status);
@@ -141,6 +133,67 @@ namespace LighthouseManager
             {
                 device?.Dispose();
             }
+        }
+
+        public async Task Identify(ulong address)
+        {
+            BluetoothLEDevice device = null;
+            var macAddress = address.ToMacString();
+
+            try
+            {
+                device = await Connect(address);
+                var service = await device.GetGattServicesForUuidAsync(Guid.Parse(_pwrService));
+                var identify = new Identify();
+                var characteristicResult =
+                    await service.Services.Single().GetCharacteristicsForUuidAsync(identify.GetGuid());
+                var characteristic = characteristicResult.Characteristics.Single();
+                var writeResult = await WriteAsync(characteristic, identify.Identifing);
+
+                if (writeResult.Status == GattCommunicationStatus.Success)
+                {
+                    _logger.LogInformation(
+                        $"{address.ToMacString()}: Successfully executed 'Identify' command.");
+                }
+                else
+                {
+                    var ex = new GattCommunicationException(
+                        $"{macAddress}: WriteValueWithResultAsyncError",
+                        writeResult.Status);
+                    _logger.LogError(ex.Message);
+                    throw ex;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"{macAddress}: {ex.Message}");
+                throw;
+            }
+            finally
+            {
+                device?.Dispose();
+            }
+        }
+
+        /// <summary>
+        ///     Connects to a device and returns it if success
+        /// </summary>
+        /// <param name="address">Device address</param>
+        /// <returns>Connected device</returns>
+        private async Task<BluetoothLEDevice> Connect(ulong address)
+        {
+            var macAddress = address.ToMacString();
+
+            _logger.LogInformation($"{macAddress}: Connecting to device.");
+
+            var device = await BluetoothLEDevice.FromBluetoothAddressAsync(address);
+            if (device == null)
+            {
+                _logger.LogError($"{macAddress}: Failed to connect to device.");
+                throw new BluetoothConnectionException("Failed to connect to device.");
+            }
+
+            return device;
         }
 
         private void WatcherOnReceived(BluetoothLEAdvertisementWatcher sender,
