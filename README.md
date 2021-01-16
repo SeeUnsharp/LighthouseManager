@@ -14,6 +14,7 @@ With Command Promt or Powershell navigate to the location where LighthouseManage
 Functions / parameters:
 
 - `-d` or `--discover` Discover new Base Stations to get their MAC-Addresses.
+- `-i` or `--identify` `-a AA:AA:AA:AA:AA` Identify a base station by flashing the LED.
 - `-w` or `--wake` `-a AA:AA:AA:AA:AA:AA,BB:BB:BB:BB:BB:BB` Wake one or more Base Stations (write one or more addresses)
 - `-s` or `--sleep` `-a AA:AA:AA:AA:AA:AA,BB:BB:BB:BB:BB:BB` Sleep one or more Base Stations (write one or more addresses)
 
