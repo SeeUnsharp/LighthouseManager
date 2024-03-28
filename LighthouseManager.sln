@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30804.86
@@ -7,7 +7,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LighthouseManager", "Lighth
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LighthouseManagerService", "LighthouseManagerService\LighthouseManagerService.csproj", "{9B148C67-7EE4-4363-8268-72A5EF10C12F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LighthouseManager.Shared", "LighthouseManager.Shared\LighthouseManager.Shared.csproj", "{44CCD0BA-33A1-4BC0-81BC-5E5439CD94B5}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LighthouseManager.Shared", "LighthouseManager.Shared\LighthouseManager.Shared.csproj", "{44CCD0BA-33A1-4BC0-81BC-5E5439CD94B5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
