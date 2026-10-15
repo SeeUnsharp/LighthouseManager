@@ -54,6 +54,12 @@ public class App : Application
         open.Click += (_, _) => _flyout!.ShowFlyout();
         var wake = new NativeMenuItem("Turn all on") { Command = _viewModel!.WakeAllCommand };
         var sleep = new NativeMenuItem("Sleep all") { Command = _viewModel.SleepAllCommand };
+        var find = new NativeMenuItem("Find base stations…");
+        find.Click += (_, _) =>
+        {
+            _flyout!.ShowFlyout();
+            _viewModel.FindStationsCommand.Execute(null);
+        };
         var settings = new NativeMenuItem("Open settings") { Command = _viewModel.OpenSettingsCommand };
         var restart = new NativeMenuItem("Restart service")
             { Command = _viewModel.RestartServiceCommand, IsVisible = _viewModel.CanManageService };
@@ -77,7 +83,7 @@ public class App : Application
 
         return
         [
-            open, new NativeMenuItemSeparator(), wake, sleep, new NativeMenuItemSeparator(), settings, restart,
+            open, new NativeMenuItemSeparator(), wake, sleep, new NativeMenuItemSeparator(), find, settings, restart,
             remove, new NativeMenuItemSeparator(), quit
         ];
     }

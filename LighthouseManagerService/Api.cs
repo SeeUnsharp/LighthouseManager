@@ -29,6 +29,29 @@ public static class Api
 
         api.MapGet("/stations", (StationController c) => c.GetSnapshot().Stations);
 
+        api.MapPost("/discovery", async (StationController c, CancellationToken ct, int? seconds) =>
+        {
+            var duration = TimeSpan.FromSeconds(Math.Clamp(seconds ?? 10, 3, 60));
+            var found = await c.DiscoverAsync(duration, ct);
+            if (found == null) return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            return TypedResults.Ok(new DiscoveryResult(found.Select(f =>
+                new DiscoveredStationInfo(MacAddress.Format(f.Address), f.Name, c.IsKnown(f.Address))).ToArray()));
+        });
+
+        api.MapPost("/stations", (AddStationsRequest request, StationController c) =>
+        {
+            if (!MacAddress.TryParseList(request.Addresses, out var addresses, out _) || addresses.Count == 0)
+                return Results.BadRequest();
+            c.AddStations(addresses.ToList());
+            return TypedResults.Ok(c.GetSnapshot());
+        });
+
+        api.MapDelete("/stations/{address}", (string address, StationController c) =>
+        {
+            if (!MacAddress.TryParse(address, out var parsed)) return Results.BadRequest();
+            return c.RemoveStation(parsed) ? TypedResults.Ok(c.GetSnapshot()) : Results.NotFound();
+        });
+
         api.MapPost("/stations/refresh", async (StationController c, CancellationToken ct) =>
             ToResult(await c.RefreshAsync(null, ct), c));
 
@@ -114,6 +137,13 @@ internal sealed class NoListenerServer : IServer
 
 public sealed record AutomaticModeRequest(bool Enabled);
 
+public sealed record AddStationsRequest(string[] Addresses);
+
+/// <param name="Configured">Already in the configuration.</param>
+public sealed record DiscoveredStationInfo(string Address, string Name, bool Configured);
+
+public sealed record DiscoveryResult(DiscoveredStationInfo[] Stations);
+
 public sealed record CommandResult(bool Success, StatusSnapshot Status);
 
 /// <summary>
@@ -128,4 +158,6 @@ public sealed class CamelCaseEnumConverter<TEnum>() : JsonStringEnumConverter<TE
 [JsonSerializable(typeof(StationInfo[]))]
 [JsonSerializable(typeof(CommandResult))]
 [JsonSerializable(typeof(AutomaticModeRequest))]
+[JsonSerializable(typeof(AddStationsRequest))]
+[JsonSerializable(typeof(DiscoveryResult))]
 internal partial class ApiJsonContext : JsonSerializerContext;

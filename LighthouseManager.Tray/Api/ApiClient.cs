@@ -25,6 +25,31 @@ public sealed class ApiClient(Uri baseAddress) : IDisposable
 
     public Task<CommandResult> RefreshAsync() => PostAsync("api/stations/refresh");
 
+    /// <summary>
+    ///     Scans for base stations nearby; takes <paramref name="seconds" />.
+    /// </summary>
+    public async Task<DiscoveryResult> DiscoverAsync(int seconds = 10)
+    {
+        using var response = await _http.PostAsync($"api/discovery?seconds={seconds}", null);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync(ApiJsonContext.Default.DiscoveryResult))!;
+    }
+
+    public async Task<StatusSnapshot> AddStationsAsync(IEnumerable<string> addresses)
+    {
+        using var response = await _http.PostAsJsonAsync("api/stations", new AddStationsRequest(addresses.ToArray()),
+            ApiJsonContext.Default.AddStationsRequest);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync(ApiJsonContext.Default.StatusSnapshot))!;
+    }
+
+    public async Task<StatusSnapshot> RemoveStationAsync(string address)
+    {
+        using var response = await _http.DeleteAsync($"api/stations/{Uri.EscapeDataString(address)}");
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync(ApiJsonContext.Default.StatusSnapshot))!;
+    }
+
     public async Task<StatusSnapshot> SetAutomaticModeAsync(bool enabled)
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));

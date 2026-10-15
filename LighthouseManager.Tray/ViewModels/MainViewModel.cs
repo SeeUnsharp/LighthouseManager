@@ -24,7 +24,7 @@ public sealed partial class MainViewModel : ObservableObject
 {
     private readonly ApiClient _api;
 
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText))]
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText), nameof(HasNoStations), nameof(HasStations))]
     private bool _connected;
 
     // Set from the API; changing it from the UI goes through SetAutomaticModeCommand
@@ -37,7 +37,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     [ObservableProperty] private OverallState _overall = OverallState.Disconnected;
 
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasNoStations))]
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasNoStations), nameof(HasStations))]
     private int _stationCount;
 
     [ObservableProperty] private string? _settingsFile;
@@ -53,6 +53,24 @@ public sealed partial class MainViewModel : ObservableObject
 
     private readonly Updates _updates;
 
+    // Searched automatically once when no base station is configured (first start)
+    private bool _autoDiscoveryDone;
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(ShowDiscovery), nameof(HasNoStations))]
+    private bool _isDiscovering;
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(ShowDiscovery), nameof(HasNoStations))]
+    private string? _discoveryMessage;
+
+    /// <summary>
+    ///     Base stations found by the last search that aren't configured yet.
+    /// </summary>
+    public ObservableCollection<FoundStationViewModel> Found { get; } = [];
+
+    public bool HasFound => Found.Count > 0;
+
+    public bool ShowDiscovery => IsDiscovering || HasFound || DiscoveryMessage != null;
+
     public MainViewModel(ApiClient api, Updates updates)
     {
         _api = api;
@@ -64,7 +82,12 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     public bool CanManageService { get; } = SystemIntegration.IsManaged;
 
-    public bool HasNoStations => Connected && StationCount == 0;
+    /// <summary>
+    ///     Hint how to add base stations; hidden while a search runs or its results are shown.
+    /// </summary>
+    public bool HasNoStations => Connected && StationCount == 0 && !ShowDiscovery;
+
+    public bool HasStations => Connected && StationCount > 0;
 
     public bool IsUpdateAvailable => Update != null;
 
@@ -107,7 +130,6 @@ public sealed partial class MainViewModel : ObservableObject
             Dispatcher.UIThread.Post(() =>
             {
                 Connected = false;
-                OnPropertyChanged(nameof(HasNoStations));
                 UpdateOverall();
             });
 
@@ -183,6 +205,78 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task FindStations()
+    {
+        if (IsDiscovering) return;
+        Found.Clear();
+        DiscoveryMessage = null;
+        LastError = null;
+        IsDiscovering = true;
+        try
+        {
+            var result = await _api.DiscoverAsync();
+            foreach (var station in result.Stations.Where(s => !s.Configured))
+                Found.Add(new FoundStationViewModel(station.Address, station.Name));
+
+            if (Found.Count == 0)
+                DiscoveryMessage = result.Stations.Length > 0
+                    ? "All base stations nearby are already added."
+                    : "No base stations found. Make sure they are powered and within Bluetooth range.";
+        }
+        catch (Exception ex)
+        {
+            LastError = $"Search failed: {ex.Message}";
+        }
+        finally
+        {
+            IsDiscovering = false;
+            OnPropertyChanged(nameof(HasFound));
+            OnPropertyChanged(nameof(ShowDiscovery));
+            OnPropertyChanged(nameof(HasNoStations));
+        }
+    }
+
+    [RelayCommand]
+    private async Task AddFound()
+    {
+        var addresses = Found.Where(f => f.IsSelected).Select(f => f.Address).ToList();
+        if (addresses.Count == 0) return;
+        LastError = null;
+        try
+        {
+            Apply(await _api.AddStationsAsync(addresses));
+            CloseDiscovery();
+        }
+        catch (Exception ex)
+        {
+            LastError = $"Adding failed: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private void CloseDiscovery()
+    {
+        Found.Clear();
+        DiscoveryMessage = null;
+        OnPropertyChanged(nameof(HasFound));
+        OnPropertyChanged(nameof(ShowDiscovery));
+        OnPropertyChanged(nameof(HasNoStations));
+    }
+
+    public async Task RemoveStationAsync(string address)
+    {
+        LastError = null;
+        try
+        {
+            Apply(await _api.RemoveStationAsync(address));
+        }
+        catch (Exception ex)
+        {
+            LastError = $"Removing failed: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
     private void OpenSettings()
     {
         if (SettingsFile == null) return;
@@ -247,6 +341,13 @@ public sealed partial class MainViewModel : ObservableObject
 
         for (var i = 0; i < snapshot.Stations.Length; i++) Stations[i].Apply(snapshot.Stations[i]);
         StationCount = Stations.Count;
+
+        // First start: nothing configured yet, look for base stations right away
+        if (StationCount == 0 && !_autoDiscoveryDone)
+        {
+            _autoDiscoveryDone = true;
+            FindStationsCommand.Execute(null);
+        }
         UpdateOverall();
     }
 

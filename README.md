@@ -18,7 +18,7 @@ Download from [Releases](../../releases/latest):
 - **Windows:** `LighthouseManager-win-Setup.exe`. Installs for your user (no administrator rights needed) and sets up everything: the service starts at login, the tray icon starts at login, and a Start menu entry. Uninstall through *Settings → Apps → Installed apps*. The installer isn't code-signed yet, so Windows SmartScreen may warn about an unknown publisher (*More info → Run anyway*).
 - **Linux:** `LighthouseManager.AppImage`. Make it executable (`chmod +x LighthouseManager.AppImage`) and run it once. It sets up a systemd user service, tray autostart and an application menu entry, all pointing to the AppImage file, so keep it in a permanent place (e.g. `~/Applications`); after moving it, run it once more. To uninstall, choose *Remove from system…* in the tray menu (or run `LighthouseManager.AppImage --uninstall`), then delete the AppImage.
 
-Then add your base stations: the tray flyout shows *No base stations configured* with a button to open the settings file. Put the addresses into `BaseStationAddresses` (find them with `LighthouseManager -d`, see below), save, and click *Restart service*.
+Then add your base stations: on first start the tray searches for base stations nearby and offers the ones it found; *Add selected* adds them. Later, *Find* in the flyout (or *Find base stations…* in the tray menu) adds more, and *Remove* in a station's right-click menu removes one.
 
 The tray app shows when a new version is available; *Update* installs it and restarts.
 
@@ -52,7 +52,7 @@ Settings are read from the `appsettings.json` next to the program (defaults), ov
 The service creates that file on first start. Restart the service after changing it. Logs are in `%LOCALAPPDATA%\LighthouseManager\logs` (Windows) or `~/.local/state/lighthousemanager/logs` (Linux).
 
 Settings (`AppSettings` section):
-- `BaseStationAddresses` comma separated Base Station MAC addresses (you can discover them with LighthouseManager `--discover` parameter)
+- `BaseStationAddresses` comma separated Base Station MAC addresses. The tray app finds and adds them for you; you can also discover them with LighthouseManager `--discover` parameter
 - `TriggerProcesses` comma separated process names, default `vrserver`. Examples: `vrserver` (SteamVR), `monado-service` (Monado), `wivrn-server` (WiVRn)
 - `Interval` polling interval in milliseconds (minimum 1000)
 - `AutomaticMode` whether trigger processes wake/sleep the base stations (default `true`, can be toggled at runtime in the tray app / API)

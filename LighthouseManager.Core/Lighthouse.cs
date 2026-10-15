@@ -86,4 +86,7 @@ internal static class Lighthouse
     }
 }
 
+/// <param name="Name">Bluetooth name, e.g. "LHB-1A2B3C4D".</param>
+public sealed record DiscoveredStation(ulong Address, string Name);
+
 public sealed class BluetoothConnectionException(string message) : Exception(message);

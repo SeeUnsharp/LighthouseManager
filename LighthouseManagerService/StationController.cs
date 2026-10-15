@@ -32,13 +32,22 @@ public sealed class StationController
         _stopping = lifetime.ApplicationStopping;
         _manager = manager;
         settings.Value.TryGetAddresses(out var addresses);
-        Addresses = addresses;
         _stations = addresses.ToDictionary(a => a, a => new StationInfo(MacAddress.Format(a)));
         _triggerProcesses = settings.Value.GetTriggerProcesses();
         _automaticMode = settings.Value.AutomaticMode;
     }
 
-    public IReadOnlyList<ulong> Addresses { get; }
+    /// <summary>
+    ///     Configured base stations; changes at runtime through <see cref="AddStations" /> and
+    ///     <see cref="RemoveStation" />.
+    /// </summary>
+    public IReadOnlyList<ulong> Addresses
+    {
+        get
+        {
+            lock (_sync) return _stations.Keys.ToList();
+        }
+    }
 
     public bool AutomaticMode
     {
@@ -66,7 +75,59 @@ public sealed class StationController
     /// </summary>
     public int ManualOverrideVersion { get; private set; }
 
-    public bool IsKnown(ulong address) => _stations.ContainsKey(address);
+    public bool IsKnown(ulong address)
+    {
+        lock (_sync) return _stations.ContainsKey(address);
+    }
+
+    /// <summary>
+    ///     Scans for base stations nearby (doesn't change the configuration).
+    /// </summary>
+    public async Task<IReadOnlyList<DiscoveredStation>?> DiscoverAsync(TimeSpan duration, CancellationToken ct)
+    {
+        IReadOnlyList<DiscoveredStation> found = [];
+        var success = await RunAsync([], OperationKind.Passive, ct, async token =>
+        {
+            found = await _manager.FindBaseStationsAsync(duration, token);
+            return true;
+        });
+        return success ? found : null;
+    }
+
+    /// <summary>
+    ///     Adds base stations to the configuration (saved to the user settings file) and reads their state.
+    /// </summary>
+    public void AddStations(IReadOnlyCollection<ulong> addresses)
+    {
+        List<ulong> added;
+        lock (_sync)
+        {
+            added = addresses.Where(a => !_stations.ContainsKey(a)).Distinct().ToList();
+            foreach (var address in added) _stations[address] = new StationInfo(MacAddress.Format(address));
+        }
+
+        if (added.Count == 0) return;
+        Save();
+        _logger.LogInformation("Added base station(s) {Addresses}", string.Join(",", added.Select(MacAddress.Format)));
+        Publish();
+        ScheduleRefresh(added, TimeSpan.Zero);
+    }
+
+    /// <returns>false if the base station isn't configured.</returns>
+    public bool RemoveStation(ulong address)
+    {
+        lock (_sync)
+        {
+            if (!_stations.Remove(address)) return false;
+        }
+
+        Save();
+        _logger.LogInformation("Removed base station {Address}", MacAddress.Format(address));
+        Publish();
+        return true;
+    }
+
+    private void Save() => UserSettings.SaveBaseStationAddresses(Addresses);
 
     /// <summary>
     ///     Reported by the trigger watcher; null when no trigger process runs.

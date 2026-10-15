@@ -44,9 +44,13 @@
                         <TextBlock Text="Base Stations" FontSize="16" FontWeight="SemiBold" />
                         <TextBlock Classes="secondary" Text="{Binding StatusText}" TextWrapping="Wrap" />
                     </StackPanel>
-                    <Button Grid.Column="1" Classes="small" Content="Refresh" VerticalAlignment="Top"
-                            Command="{Binding RefreshCommand}" IsEnabled="{Binding Connected}"
-                            ToolTip.Tip="Read the current state of all base stations" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top"
+                                IsEnabled="{Binding Connected}">
+                        <Button Classes="small" Content="Find" Command="{Binding FindStationsCommand}"
+                                ToolTip.Tip="Search for base stations nearby and add them" />
+                        <Button Classes="small" Content="Refresh" Command="{Binding RefreshCommand}"
+                                ToolTip.Tip="Read the current state of all base stations" />
+                    </StackPanel>
                 </Grid>
 
                 <!-- Automatic mode -->
@@ -71,7 +75,7 @@
                 <Separator />
 
                 <!-- All stations -->
-                <Grid ColumnDefinitions="*,8,*" IsEnabled="{Binding Connected}">
+                <Grid ColumnDefinitions="*,8,*" IsEnabled="{Binding HasStations}">
                     <Button Content="Turn all on" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                             Command="{Binding WakeAllCommand}" />
                     <Button Grid.Column="2" Content="Sleep all" HorizontalAlignment="Stretch"
@@ -88,16 +92,42 @@
                 </Grid>
             </StackPanel>
 
+            <!-- Discovery: search progress and found base stations to add -->
+            <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12" IsVisible="{Binding ShowDiscovery}">
+                <StackPanel Spacing="6" IsVisible="{Binding IsDiscovering}">
+                    <TextBlock Text="Searching for base stations…" />
+                    <ProgressBar IsIndeterminate="True" />
+                </StackPanel>
+                <StackPanel Spacing="6" IsVisible="{Binding HasFound}">
+                    <TextBlock Text="Found base stations" FontWeight="SemiBold" />
+                    <ItemsControl ItemsSource="{Binding Found}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:FoundStationViewModel">
+                                <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Classes="small" Content="Add selected" Command="{Binding AddFoundCommand}" />
+                        <Button Classes="small" Content="Cancel" Command="{Binding CloseDiscoveryCommand}" />
+                    </StackPanel>
+                </StackPanel>
+                <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding DiscoveryMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <TextBlock Classes="secondary" Text="{Binding DiscoveryMessage}" TextWrapping="Wrap"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="small" Content="OK" Command="{Binding CloseDiscoveryCommand}" />
+                </Grid>
+            </StackPanel>
+
             <!-- No base stations configured yet (e.g. right after installing) -->
             <StackPanel DockPanel.Dock="Top" Spacing="8" IsVisible="{Binding HasNoStations}">
                 <TextBlock Text="No base stations configured" FontWeight="SemiBold" />
                 <TextBlock Classes="secondary" TextWrapping="Wrap"
-                           Text="Add their addresses (BaseStationAddresses) to the settings file, then restart the service. You can find the addresses with &quot;LighthouseManager -d&quot;." />
+                           Text="Use Find to search for them, or add their addresses to the settings file:" />
                 <TextBlock Classes="secondary" Text="{Binding SettingsFile}" TextWrapping="Wrap" />
                 <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="small" Content="Find base stations" Command="{Binding FindStationsCommand}" />
                     <Button Classes="small" Content="Open settings" Command="{Binding OpenSettingsCommand}" />
-                    <Button Classes="small" Content="Restart service" Command="{Binding RestartServiceCommand}"
-                            IsVisible="{Binding CanManageService}" />
                 </StackPanel>
             </StackPanel>
 
@@ -112,7 +142,12 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:StationViewModel">
-                            <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Grid ColumnDefinitions="Auto,*,Auto" Background="Transparent">
+                                <Grid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Remove" Command="{Binding RemoveCommand}" />
+                                    </ContextMenu>
+                                </Grid.ContextMenu>
                                 <Ellipse Classes="dot" Margin="0,0,10,0"
                                          Classes.awake="{Binding IsAwake}"
                                          Classes.busy="{Binding Busy}"
