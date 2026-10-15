@@ -1,0 +1,19 @@
+<Project>
+  <PropertyGroup>
+    <!-- net10.0 uses BlueZ (Linux), the Windows TFM uses the WinRT Bluetooth APIs -->
+    <TargetFrameworks>net10.0;net10.0-windows10.0.19041.0</TargetFrameworks>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+  <!-- The BlueZ stack is D-Bus reflection based and breaks when trimmed -->
+  <ItemGroup Condition="!$(TargetFramework.Contains('-windows')) And '$(NoBluetooth)' != 'true'">
+    <TrimmerRootAssembly Include="InTheHand.BluetoothLE" />
+    <TrimmerRootAssembly Include="Linux.Bluetooth" />
+    <TrimmerRootAssembly Include="Tmds.DBus" />
+  </ItemGroup>
+</Project>

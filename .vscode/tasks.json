@@ -1,0 +1,15 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            // net10.0 = Linux (BlueZ). On Windows use net10.0-windows10.0.19041.0 for the service/CLI.
+            "label": "build",
+            "type": "process",
+            "command": "dotnet",
+            "args": ["build", "${workspaceFolder}/LighthouseManager.sln", "-f", "net10.0",
+                "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}
