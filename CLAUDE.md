@@ -35,6 +35,8 @@ dotnet publish LighthouseManager -c Release -f net10.0 -r linux-x64 -o ./Release
 # Tray app (both platforms -f net10.0): additionally -p:IncludeNativeLibrariesForSelfExtract=true for Skia/HarfBuzz
 ```
 
+Installable packages (Velopack): `build/pack.sh <linux-x64|win-x64> <version>` publishes all three apps into `publish/<rid>` and runs `vpk [linux|win] pack` into `releases/<linux|win>` (AppImage needs `mksquashfs`; the Windows Setup.exe is cross-built on Linux). Tags `v*` trigger `.github/workflows/release.yml`, which builds both and uploads them to one GitHub release (separate output dirs: both platforms' nupkgs may share a file name). The version comes from `-p:Version` (default in `Directory.Build.props`).
+
 Trimming/single-file pitfalls (both verified to break things):
 - The BlueZ stack is reflection based; `Directory.Build.props` roots `InTheHand.BluetoothLE`, `Linux.Bluetooth`, `Tmds.DBus` for the non-Windows TFM. Remove that and Linux fails at runtime.
 - Don't add `IncludeAllContentForSelfExtract`: it makes `AppContext.BaseDirectory` point to the extraction cache, so `appsettings.json` and `App_Data/logs` are no longer resolved next to the executable.
@@ -56,7 +58,9 @@ Trimming/single-file pitfalls (both verified to break things):
   - Example systemd user unit: `LighthouseManagerService/linux/lighthousemanager.service` (`Type=notify`).
 - **LighthouseManager.Tray** (Avalonia 12, CommunityToolkit.Mvvm, compiled bindings): `TrayIcon` + borderless `FlyoutWindow` that hides on deactivation. `MainViewModel.RunEventLoopAsync` follows `/api/events` and reconnects; commands go through `ApiClient`. The tray icon is drawn at runtime (`TrayIconRenderer`), no image assets. Tray APIs don't expose the icon position, so the flyout goes to the right corner on the panel side; Plasma under XWayland reports working area == screen, hence `UnknownPanelMargin`. The window's `MaxHeight` follows the working area and only the station list (`ScrollViewer` in the `DockPanel` fill) scrolls, so any number of stations fits. Tray tooltips are capped at 127 chars (Windows limit), with a per-state summary when the per-station list doesn't fit. `--open` shows the flyout at startup.
 
-Logs go to `<exe dir>/App_Data/logs/*.log`.
+Settings and logs live in per-user directories (`AppPaths` in Core), never in the install folder (read-only AppImage, replaced by Velopack updates): `UserSettings` layers `AppPaths.UserSettingsFile` (`%APPDATA%\LighthouseManager` / `~/.config/lighthousemanager`, created from a template on first start) between the `appsettings.json` next to the exe and user secrets/env/command line. Logs: `%LOCALAPPDATA%\LighthouseManager\logs` / `~/.local/state/lighthousemanager/logs`. An empty `BaseStationAddresses` is valid (fresh install); the status reports `settingsFile` so the tray can point to it.
+
+**Installed tray app** (`LighthouseManager.Tray/Integration`): Velopack's main exe is the tray. Windows uses Velopack's fast-callback hooks (Windows only) in `Program.Main`: install/update register a per-user scheduled task for the service (no admin) and the HKCU Run key for the tray; before an update the task is stopped (the service's files are in use); uninstall removes both. Linux (AppImage, detected via `$APPIMAGE`) has no hooks: every tray start (re)writes the systemd user unit, autostart and menu entries if they differ (handles a moved AppImage); "Remove from system…" in the tray menu undoes it. The AppImage has one entry point, so `--service` / `--cli` in `SystemIntegration.TryForward` start the sibling binaries (the AppImage unit uses `Type=exec`: .NET only sends the systemd readiness notification when its parent is systemd, which isn't the case behind the forwarder). `Updates` checks GitHub Releases (installed builds only) and the flyout shows "Update to …".
 
 ## Testing against hardware
 

@@ -16,7 +16,7 @@ public class ApiContractTests
             false, null, new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.Zero)),
         new Server.StationInfo("AA:BB:CC:DD:EE:02", null, LighthouseManager.Core.StationState.Booting, null, true,
             "Not reachable")
-    ]);
+    ], "/home/user/.config/lighthousemanager/appsettings.json", "2.1.0");
 
     [Fact]
     public void Status_snapshot_round_trips_from_service_to_tray()
@@ -28,6 +28,8 @@ public class ApiContractTests
         Assert.True(client.TriggerActive);
         Assert.Equal("vrserver", client.TriggerProcess);
         Assert.Equal(["vrserver", "monado-service"], client.TriggerProcesses);
+        Assert.Equal("/home/user/.config/lighthousemanager/appsettings.json", client.SettingsFile);
+        Assert.Equal("2.1.0", client.Version);
         Assert.Collection(client.Stations,
             s =>
             {
@@ -58,6 +60,8 @@ public class ApiContractTests
         Assert.Contains("\"state\":\"awake\"", json);
         Assert.Contains("\"state\":\"booting\"", json);
         Assert.Contains("\"rawState\":11", json);
+        Assert.Contains("\"settingsFile\":", json);
+        Assert.Contains("\"version\":\"2.1.0\"", json);
     }
 
     [Fact]

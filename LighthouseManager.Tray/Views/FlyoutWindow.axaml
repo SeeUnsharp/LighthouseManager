@@ -77,6 +77,28 @@
                     <Button Grid.Column="2" Content="Sleep all" HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Center" Command="{Binding SleepAllCommand}" />
                 </Grid>
+
+                <!-- Version and updates -->
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="secondary" Text="{Binding VersionText}" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="small" Content="{Binding UpdateText}"
+                            Command="{Binding InstallUpdateCommand}" IsVisible="{Binding IsUpdateAvailable}"
+                            IsEnabled="{Binding !IsUpdating}"
+                            ToolTip.Tip="Download and install the new version, then restart" />
+                </Grid>
+            </StackPanel>
+
+            <!-- No base stations configured yet (e.g. right after installing) -->
+            <StackPanel DockPanel.Dock="Top" Spacing="8" IsVisible="{Binding HasNoStations}">
+                <TextBlock Text="No base stations configured" FontWeight="SemiBold" />
+                <TextBlock Classes="secondary" TextWrapping="Wrap"
+                           Text="Add their addresses (BaseStationAddresses) to the settings file, then restart the service. You can find the addresses with &quot;LighthouseManager -d&quot;." />
+                <TextBlock Classes="secondary" Text="{Binding SettingsFile}" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="small" Content="Open settings" Command="{Binding OpenSettingsCommand}" />
+                    <Button Classes="small" Content="Restart service" Command="{Binding RestartServiceCommand}"
+                            IsVisible="{Binding CanManageService}" />
+                </StackPanel>
             </StackPanel>
 
             <!-- Stations -->

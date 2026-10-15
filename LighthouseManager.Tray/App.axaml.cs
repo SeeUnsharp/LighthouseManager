@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using LighthouseManager.Tray.Api;
+using LighthouseManager.Tray.Integration;
 using LighthouseManager.Tray.ViewModels;
 using LighthouseManager.Tray.Views;
 
@@ -26,7 +27,7 @@ public class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             _api = new ApiClient(Program.ApiUrl);
-            _viewModel = new MainViewModel(_api);
+            _viewModel = new MainViewModel(_api, new Updates());
             _flyout = new FlyoutWindow { DataContext = _viewModel };
 
             _trayIcon = new TrayIcon { Menu = CreateMenu(desktop) };
@@ -37,6 +38,7 @@ public class App : Application
             UpdateTrayIcon();
 
             _ = _viewModel.RunEventLoopAsync(_shutdown.Token);
+            _ = _viewModel.RunUpdateLoopAsync(_shutdown.Token);
             if (desktop.Args?.Contains("--open") == true) _flyout.ShowFlyout();
             desktop.ShutdownRequested += (_, _) => _shutdown.Cancel();
         }
@@ -50,6 +52,19 @@ public class App : Application
         open.Click += (_, _) => _flyout!.ShowFlyout();
         var wake = new NativeMenuItem("Turn all on") { Command = _viewModel!.WakeAllCommand };
         var sleep = new NativeMenuItem("Sleep all") { Command = _viewModel.SleepAllCommand };
+        var settings = new NativeMenuItem("Open settings") { Command = _viewModel.OpenSettingsCommand };
+        var restart = new NativeMenuItem("Restart service")
+            { Command = _viewModel.RestartServiceCommand, IsVisible = _viewModel.CanManageService };
+        // An AppImage has no uninstaller; Windows uninstalls through "Installed apps"
+        var remove = new NativeMenuItem("Remove from system…")
+            { IsVisible = OperatingSystem.IsLinux() && _viewModel.CanManageService };
+        remove.Click += (_, _) =>
+        {
+            SystemIntegration.Uninstall();
+            _shutdown.Cancel();
+            _trayIcon?.Dispose();
+            desktop.Shutdown();
+        };
         var quit = new NativeMenuItem("Quit");
         quit.Click += (_, _) =>
         {
@@ -58,7 +73,11 @@ public class App : Application
             desktop.Shutdown();
         };
 
-        return [open, new NativeMenuItemSeparator(), wake, sleep, new NativeMenuItemSeparator(), quit];
+        return
+        [
+            open, new NativeMenuItemSeparator(), wake, sleep, new NativeMenuItemSeparator(), settings, restart,
+            remove, new NativeMenuItemSeparator(), quit
+        ];
     }
 
     private void ToggleFlyout()
