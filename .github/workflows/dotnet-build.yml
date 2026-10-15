@@ -20,9 +20,9 @@ jobs:
             artifact: LighthouseManager-linux-x64
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Setup .NET SDK
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v6
       with:
         dotnet-version: 10.0.x
     - name: Test
@@ -45,7 +45,7 @@ jobs:
       if: matrix.rid == 'linux-x64'
       run: cp LighthouseManagerService/linux/lighthousemanager.service LighthouseManager.Tray/linux/lighthousemanager-tray.desktop ./Release/
     - name: Upload a Build Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ matrix.artifact }}
         path: Release/
