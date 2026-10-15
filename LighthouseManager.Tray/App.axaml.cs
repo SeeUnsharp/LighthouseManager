@@ -40,6 +40,8 @@ public class App : Application
             _ = _viewModel.RunEventLoopAsync(_shutdown.Token);
             _ = _viewModel.RunUpdateLoopAsync(_shutdown.Token);
             if (desktop.Args?.Contains("--open") == true) _flyout.ShowFlyout();
+            Program.Instance?.ListenForActivation(() =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => _flyout.ShowFlyout()));
             desktop.ShutdownRequested += (_, _) => _shutdown.Cancel();
         }
 

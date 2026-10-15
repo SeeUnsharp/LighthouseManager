@@ -87,6 +87,14 @@ internal static class Program
         // Help output or invalid arguments
         if (!parsed || command == null) return Failure;
 
+        // Two processes connecting to the same base stations fail
+        if (SingleInstance.IsHeld("service"))
+        {
+            Log.Error("LighthouseManagerService is running and controls the base stations. Use the tray app or its " +
+                      "API instead, e.g. curl -X POST http://127.0.0.1:47800/api/stations/wake");
+            return Failure;
+        }
+
         return await command();
     }
 
