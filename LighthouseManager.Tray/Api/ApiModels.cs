@@ -38,8 +38,16 @@ public sealed record CommandResult(bool Success, StatusSnapshot Status);
 
 public sealed record AutomaticModeRequest(bool Enabled);
 
+public sealed record AddStationsRequest(string[] Addresses);
+
+public sealed record DiscoveredStationInfo(string Address, string Name, bool Configured);
+
+public sealed record DiscoveryResult(DiscoveredStationInfo[] Stations);
+
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, UseStringEnumConverter = true)]
 [JsonSerializable(typeof(StatusSnapshot))]
 [JsonSerializable(typeof(CommandResult))]
 [JsonSerializable(typeof(AutomaticModeRequest))]
+[JsonSerializable(typeof(AddStationsRequest))]
+[JsonSerializable(typeof(DiscoveryResult))]
 internal partial class ApiJsonContext : JsonSerializerContext;

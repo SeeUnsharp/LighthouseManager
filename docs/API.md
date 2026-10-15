@@ -88,6 +88,9 @@ seconds later.
 | `POST` | `/api/stations/{address}/sleep` | Put one station to sleep |
 | `POST` | `/api/stations/{address}/identify` | Flash the station's LED |
 | `POST` | `/api/stations/{address}/refresh` | Read the state of one station |
+| `POST` | `/api/discovery?seconds=10` | Search for base stations nearby (3–60 s, default 10), see [Discovery](#discovery) |
+| `POST` | `/api/stations` | Body `{"addresses": ["AA:BB:CC:DD:EE:01", …]}`: add base stations, returns the status |
+| `DELETE` | `/api/stations/{address}` | Remove a base station, returns the status (`404` if not configured) |
 
 `identify` makes the LED blink. Note that the base station firmware also **wakes a sleeping station** on identify, and
 it stays awake until it gets a sleep command. The service re-reads the state about 5 seconds later, so clients see
@@ -95,6 +98,23 @@ the change.
 
 `{address}` accepts `AA:BB:CC:DD:EE:01`, `AA-BB-CC-DD-EE-01` or `AABBCCDDEE01`. Only configured stations can be
 used.
+
+### Discovery
+
+`POST /api/discovery` scans for the given time and returns every Lighthouse base station found (Bluetooth name
+starting with `LHB-`). It doesn't change anything; add stations with `POST /api/stations`.
+
+```json
+{
+  "stations": [
+    { "address": "AA:BB:CC:DD:EE:01", "name": "LHB-1A2B3C4D", "configured": true },
+    { "address": "AA:BB:CC:DD:EE:02", "name": "LHB-5E6F7A8B", "configured": false }
+  ]
+}
+```
+
+Added and removed stations take effect immediately and are saved to the user settings file (`settingsFile` in the
+status), so they survive a restart.
 
 ### Command responses
 

@@ -66,6 +66,44 @@ public sealed class BaseStationManager(ILogger<BaseStationManager> logger)
         }
     }
 
+    /// <summary>
+    ///     Scans for <paramref name="duration" /> and returns the base stations found (name prefix "LHB-").
+    /// </summary>
+    public async Task<IReadOnlyList<DiscoveredStation>> FindBaseStationsAsync(TimeSpan duration,
+        CancellationToken cancellationToken)
+    {
+        var found = new Dictionary<ulong, string>();
+        void OnDevice(string? name, ulong address)
+        {
+            if (name?.StartsWith(Lighthouse.NamePrefix, StringComparison.Ordinal) != true) return;
+            lock (found) found[address] = name;
+        }
+
+#if WINDOWS
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(duration);
+        try
+        {
+            await PlatformDiscoverAsync(OnDevice, timeout.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Scan time is over
+        }
+#else
+        // One BlueZ discovery for the whole duration; cancelling it midway would drop the partial result
+        foreach (var device in await ScanAsync(duration, cancellationToken))
+            if (MacAddress.TryParse(device.Id, out var address))
+                OnDevice(device.Name, address);
+#endif
+
+        lock (found)
+        {
+            logger.LogInformation("Discovery found {Count} base station(s).", found.Count);
+            return found.Select(f => new DiscoveredStation(f.Key, f.Value)).OrderBy(s => s.Name).ToList();
+        }
+    }
+
 #if WINDOWS
     // InTheHand's ScanForDevicesAsync only lists devices Windows already knows (DeviceInformation.FindAllAsync),
     // so use an active advertisement watcher like the original implementation (the name is in the scan response).

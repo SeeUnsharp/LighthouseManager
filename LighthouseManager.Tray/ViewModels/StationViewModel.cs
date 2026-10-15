@@ -54,4 +54,7 @@ public sealed partial class StationViewModel(string address, MainViewModel main)
 
     [RelayCommand]
     private Task Identify() => main.RunAsync(api => api.IdentifyAsync(Address));
+
+    [RelayCommand]
+    private Task Remove() => main.RemoveStationAsync(Address);
 }

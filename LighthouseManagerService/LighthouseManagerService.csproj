@@ -6,6 +6,10 @@
     <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
     <!-- API only, no static files -->
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+  </PropertyGroup>
+  <PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">
+    <!-- No console window when started by the scheduled task at login; logs go to the log file -->
+    <OutputType>WinExe</OutputType>
     <!-- Self-hosted Kestrel, no IIS: no web.config / ASP.NET Core Module in the output -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
   </PropertyGroup>

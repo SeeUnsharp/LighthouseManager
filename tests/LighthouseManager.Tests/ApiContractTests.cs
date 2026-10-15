@@ -72,6 +72,26 @@ public class ApiContractTests
     }
 
     [Fact]
+    public void Discovery_result_and_add_request_round_trip()
+    {
+        var json = JsonSerializer.Serialize(new Server.DiscoveryResult(
+        [
+            new Server.DiscoveredStationInfo("AA:BB:CC:DD:EE:01", "LHB-1A2B3C4D", true),
+            new Server.DiscoveredStationInfo("AA:BB:CC:DD:EE:02", "LHB-5E6F7A8B", false)
+        ]), Server.ApiJsonContext.Default.DiscoveryResult);
+        var client = JsonSerializer.Deserialize(json, Client.ApiJsonContext.Default.DiscoveryResult)!;
+
+        Assert.Equal(["LHB-1A2B3C4D", "LHB-5E6F7A8B"], client.Stations.Select(s => s.Name));
+        Assert.Equal([true, false], client.Stations.Select(s => s.Configured));
+        Assert.Contains("\"configured\":false", json);
+
+        var request = JsonSerializer.Serialize(new Client.AddStationsRequest(["AA:BB:CC:DD:EE:02"]),
+            Client.ApiJsonContext.Default.AddStationsRequest);
+        var server = JsonSerializer.Deserialize(request, Server.ApiJsonContext.Default.AddStationsRequest)!;
+        Assert.Equal(["AA:BB:CC:DD:EE:02"], server.Addresses);
+    }
+
+    [Fact]
     public void Command_result_round_trips()
     {
         var json = JsonSerializer.Serialize(new Server.CommandResult(false, Snapshot),

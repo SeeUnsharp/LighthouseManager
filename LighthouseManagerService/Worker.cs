@@ -25,7 +25,7 @@ public class Worker(ILogger<Worker> logger, IOptions<AppSettings> settings, Stat
         logger.LogInformation("Interval: {Interval}, BaseStationAddresses: {Addresses}, TriggerProcesses: {Triggers}",
             settings.Value.Interval, string.Join(',', addresses.Select(MacAddress.Format)), string.Join(',', triggers));
         if (addresses.Count == 0)
-            logger.LogWarning("No base stations configured. Add their addresses to {File} and restart the service.",
+            logger.LogWarning("No base stations configured. Add them in the tray app (it searches for them) or in {File}.",
                 AppPaths.UserSettingsFile);
         logger.LogInformation("Start watching trigger processes.");
 
@@ -75,7 +75,8 @@ public class Worker(ILogger<Worker> logger, IOptions<AppSettings> settings, Stat
 
                     // A new automatic job cancels the previous one inside the controller
                     _jobFailureHandled = false;
-                    _job = controller.SetPowerAsync(addresses, state, true, stoppingToken);
+                    // Current list: base stations can be added through the API at any time
+                    _job = controller.SetPowerAsync(controller.Addresses, state, true, stoppingToken);
                 }
 
                 if (refreshInterval > TimeSpan.Zero && refresh.IsCompleted && now - lastRefresh >= refreshInterval)
