@@ -15,6 +15,11 @@ internal static class Program
     /// </summary>
     public static Uri ApiUrl { get; private set; } = new(DefaultApiUrl);
 
+    /// <summary>
+    ///     The single instance lock of this tray, used by the app to listen for "show the flyout" requests.
+    /// </summary>
+    public static SingleInstance? Instance { get; private set; }
+
     [STAThread]
     public static int Main(string[] args)
     {
@@ -41,6 +46,16 @@ internal static class Program
             SystemIntegration.Uninstall();
             return 0;
         }
+
+        // One tray per user: a second start shows the running tray's flyout instead
+        using var instance = SingleInstance.TryAcquire();
+        if (instance == null)
+        {
+            SingleInstance.ActivateRunningInstance();
+            return 0;
+        }
+
+        Instance = instance;
 
         // AppImage: (re)create autostart, menu entry and systemd unit, e.g. after the file was moved
         if (OperatingSystem.IsLinux() && SystemIntegration.IsManaged) SystemIntegration.Install();

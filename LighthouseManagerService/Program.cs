@@ -5,6 +5,16 @@ using Serilog;
 
 AppLogging.Configure("LighthouseManagerService.log");
 
+// Two services would fight over the Bluetooth connections (and the API port)
+using var instance = SingleInstance.TryAcquire("service");
+if (instance == null)
+{
+    // Exit code 0: systemd / the scheduled task must not restart it in a loop
+    Log.Warning("LighthouseManagerService is already running for this user, exiting");
+    await AppLogging.CloseAsync();
+    return 0;
+}
+
 try
 {
     // Content root next to the executable so appsettings.json is found when started as Windows service / systemd unit
@@ -74,9 +84,11 @@ catch (Exception e)
 {
     Log.Fatal(e, "Application terminated unexpectedly");
     // Non-zero so systemd Restart=on-failure / Windows service recovery can kick in
-    Environment.ExitCode = 1;
+    return 1;
 }
 finally
 {
     await AppLogging.CloseAsync();
 }
+
+return 0;

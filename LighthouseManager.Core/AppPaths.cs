@@ -21,13 +21,13 @@ public static class AppPaths
     public static string UserSettingsFile => Path.Combine(ConfigDirectory, "appsettings.json");
 
     /// <summary>
-    ///     Windows: %LOCALAPPDATA%\LighthouseManager\logs, Linux: $XDG_STATE_HOME/lighthousemanager/logs
-    ///     (~/.local/state/...).
+    ///     Windows: %LOCALAPPDATA%\LighthouseManager, Linux: $XDG_STATE_HOME/lighthousemanager (~/.local/state/...).
     /// </summary>
-    public static string LogDirectory => OperatingSystem.IsWindows()
-        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LighthouseManager",
-            "logs")
-        : Path.Combine(XdgDirectory("XDG_STATE_HOME", Path.Combine(".local", "state")), "lighthousemanager", "logs");
+    public static string StateDirectory => OperatingSystem.IsWindows()
+        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LighthouseManager")
+        : Path.Combine(XdgDirectory("XDG_STATE_HOME", Path.Combine(".local", "state")), "lighthousemanager");
+
+    public static string LogDirectory => Path.Combine(StateDirectory, "logs");
 
     /// <summary>
     ///     Product version, e.g. "2.0.0" (from the release tag in CI).

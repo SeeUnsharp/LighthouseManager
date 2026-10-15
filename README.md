@@ -35,7 +35,7 @@ Functions / parameters:
 - `-w` or `--wake` `-a AA:AA:AA:AA:AA:AA,BB:BB:BB:BB:BB:BB` Wake one or more Base Stations (write one or more addresses)
 - `-s` or `--sleep` `-a AA:AA:AA:AA:AA:AA,BB:BB:BB:BB:BB:BB` Sleep one or more Base Stations (write one or more addresses)
 
-The command-line tool talks to the base stations directly. Don't use it while LighthouseManagerService runs: two processes connecting to the same base stations at the same time fail. Use the service's [API](docs/API.md) instead (e.g. `curl -X POST http://127.0.0.1:47800/api/stations/wake`).
+The command-line tool talks to the base stations directly. Two processes connecting to the same base stations at the same time fail, so it refuses to run while LighthouseManagerService runs for your user. Use the tray app or the service's [API](docs/API.md) instead (e.g. `curl -X POST http://127.0.0.1:47800/api/stations/wake`).
 
 ## Exit codes
 Based on success or not LighthouseManager will exit with different codes
@@ -59,6 +59,8 @@ Settings (`AppSettings` section):
 - `StateRefreshInterval` how often the power state of the base stations is read, in seconds (default `300`, `0` = off)
 - `ApiUrl` address of the [HTTP API](docs/API.md) (default `http://127.0.0.1:47800`, empty = off). The API has no authentication, keep it on loopback
 - `AllowedOrigins` comma separated browser origins allowed to use the API, for web based UIs (default: none)
+
+Only one service runs per user: a second one exits right away (exit code 0, so autostart doesn't retry it).
 
 A manual wake/sleep (tray app, API) always wins: automatic handling only kicks in again when a trigger process starts or the last one exits.
 
@@ -102,7 +104,7 @@ Tray icon for Windows and Linux. The icon shows the overall state (green: on, ye
 - turn all on / sleep all
 - the automatic mode switch
 
-Right click opens a menu with the most important actions, *Open settings*, *Restart service* and Quit.
+Only one tray app runs per user: starting it again (Start menu, autostart, AppImage) opens the flyout of the running one. Right click opens a menu with the most important actions, *Open settings*, *Restart service* and Quit.
 
 The tray app needs a running LighthouseManagerService. It connects to `http://127.0.0.1:47800` by default; use `--api-url <url>` or the environment variable `LIGHTHOUSEMANAGER_API_URL` for a different address.
 
