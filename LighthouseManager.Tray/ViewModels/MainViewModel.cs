@@ -3,6 +3,8 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LighthouseManager.Tray.Api;
+using LighthouseManager.Tray.Integration;
+using Velopack;
 
 namespace LighthouseManager.Tray.ViewModels;
 
@@ -35,10 +37,40 @@ public sealed partial class MainViewModel : ObservableObject
 
     [ObservableProperty] private OverallState _overall = OverallState.Disconnected;
 
-    public MainViewModel(ApiClient api)
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasNoStations))]
+    private int _stationCount;
+
+    [ObservableProperty] private string? _settingsFile;
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(VersionText))]
+    private string? _serviceVersion;
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(UpdateText))]
+    [NotifyPropertyChangedFor(nameof(IsUpdateAvailable))]
+    private UpdateInfo? _update;
+
+    [ObservableProperty] private bool _isUpdating;
+
+    private readonly Updates _updates;
+
+    public MainViewModel(ApiClient api, Updates updates)
     {
         _api = api;
+        _updates = updates;
     }
+
+    /// <summary>
+    ///     Installed builds can restart the service themselves (scheduled task / systemd user unit).
+    /// </summary>
+    public bool CanManageService { get; } = SystemIntegration.IsManaged;
+
+    public bool HasNoStations => Connected && StationCount == 0;
+
+    public bool IsUpdateAvailable => Update != null;
+
+    public string UpdateText => Update == null ? "" : $"Update to {Update.TargetFullRelease.Version}";
+
+    public string VersionText => ServiceVersion == null ? "" : $"v{ServiceVersion}";
 
     public ObservableCollection<StationViewModel> Stations { get; } = [];
 
@@ -75,6 +107,7 @@ public sealed partial class MainViewModel : ObservableObject
             Dispatcher.UIThread.Post(() =>
             {
                 Connected = false;
+                OnPropertyChanged(nameof(HasNoStations));
                 UpdateOverall();
             });
 
@@ -105,6 +138,69 @@ public sealed partial class MainViewModel : ObservableObject
         {
             LastError = ex.Message;
         }
+    }
+
+    /// <summary>
+    ///     Looks for updates now and then every few hours, until <paramref name="ct" /> fires.
+    /// </summary>
+    public async Task RunUpdateLoopAsync(CancellationToken ct)
+    {
+        if (!_updates.IsAvailable) return;
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(30), ct);
+            while (!ct.IsCancellationRequested)
+            {
+                var update = await _updates.CheckAsync();
+                Dispatcher.UIThread.Post(() => Update = update);
+                await Task.Delay(TimeSpan.FromHours(6), ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    [RelayCommand]
+    private async Task InstallUpdate()
+    {
+        if (Update == null) return;
+        LastError = null;
+        IsUpdating = true;
+        try
+        {
+            // Restarts the app when done
+            await _updates.ApplyAsync(Update);
+        }
+        catch (Exception ex)
+        {
+            LastError = $"Update failed: {ex.Message}";
+        }
+        finally
+        {
+            IsUpdating = false;
+        }
+    }
+
+    [RelayCommand]
+    private void OpenSettings()
+    {
+        if (SettingsFile == null) return;
+        try
+        {
+            SystemIntegration.OpenFile(SettingsFile);
+        }
+        catch (Exception ex)
+        {
+            LastError = $"Can't open {SettingsFile}: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private void RestartService()
+    {
+        LastError = null;
+        SystemIntegration.RestartService();
     }
 
     [RelayCommand]
@@ -139,6 +235,8 @@ public sealed partial class MainViewModel : ObservableObject
         Connected = true;
         AutomaticMode = snapshot.AutomaticMode;
         TriggerProcess = snapshot.TriggerProcess;
+        SettingsFile = snapshot.SettingsFile;
+        ServiceVersion = snapshot.Version;
 
         // Keep view models (and their bindings) stable, the station list only changes with the service config
         if (!Stations.Select(s => s.Address).SequenceEqual(snapshot.Stations.Select(s => s.Address)))
@@ -148,6 +246,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         for (var i = 0; i < snapshot.Stations.Length; i++) Stations[i].Apply(snapshot.Stations[i]);
+        StationCount = Stations.Count;
         UpdateOverall();
     }
 

@@ -30,7 +30,9 @@ public sealed record StatusSnapshot(
     bool TriggerActive,
     string? TriggerProcess,
     string[] TriggerProcesses,
-    StationInfo[] Stations);
+    StationInfo[] Stations,
+    string? SettingsFile = null,
+    string? Version = null);
 
 public sealed record CommandResult(bool Success, StatusSnapshot Status);
 

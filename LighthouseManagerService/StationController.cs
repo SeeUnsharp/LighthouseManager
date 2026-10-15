@@ -162,7 +162,7 @@ public sealed class StationController
         lock (_sync)
         {
             return new StatusSnapshot(_automaticMode, _activeTrigger != null, _activeTrigger,
-                _triggerProcesses.ToArray(), _stations.Values.ToArray());
+                _triggerProcesses.ToArray(), _stations.Values.ToArray(), AppPaths.UserSettingsFile, AppPaths.Version);
         }
     }
 
@@ -330,4 +330,6 @@ public sealed record StatusSnapshot(
     bool TriggerActive,
     string? TriggerProcess,
     string[] TriggerProcesses,
-    StationInfo[] Stations);
+    StationInfo[] Stations,
+    string SettingsFile,
+    string Version);

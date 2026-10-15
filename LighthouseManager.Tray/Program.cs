@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using LighthouseManager.Tray.Integration;
+using Velopack;
 
 namespace LighthouseManager.Tray;
 
@@ -16,6 +18,33 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Must run first: handles the installer hooks and exits for them
+        var velopack = VelopackApp.Build();
+        if (OperatingSystem.IsWindows())
+            velopack = velopack
+                .OnAfterInstallFastCallback(_ => SystemIntegration.Install())
+                .OnAfterUpdateFastCallback(_ => SystemIntegration.Install())
+                // The service runs from the app folder, its files must not be in use while they are replaced
+                .OnBeforeUpdateFastCallback(_ => SystemIntegration.StopService())
+                .OnBeforeUninstallFastCallback(_ => SystemIntegration.Uninstall());
+        // Linux has no install/update hooks: the AppImage was replaced, restart the service from the new one
+        velopack.OnRestarted(_ =>
+        {
+            if (OperatingSystem.IsLinux()) SystemIntegration.RestartService();
+        }).Run();
+
+        if (SystemIntegration.TryForward(args) is { } exitCode) return exitCode;
+
+        // Same as "Remove from system…" in the tray menu (Linux; Windows uninstalls through "Installed apps")
+        if (args.Contains("--uninstall"))
+        {
+            SystemIntegration.Uninstall();
+            return 0;
+        }
+
+        // AppImage: (re)create autostart, menu entry and systemd unit, e.g. after the file was moved
+        if (OperatingSystem.IsLinux() && SystemIntegration.IsManaged) SystemIntegration.Install();
+
         var index = Array.IndexOf(args, "--api-url");
         var url = index >= 0 && index + 1 < args.Length
             ? args[index + 1]

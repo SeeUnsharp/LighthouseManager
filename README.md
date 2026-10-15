@@ -13,8 +13,19 @@ The solution consists of:
 - Windows 10 64bit (minimum 10.0.19041.0) or Linux x64 with BlueZ 5.50+
 - Integrated Bluetooth or dongle managed by the OS
 
-## Usage
-With a terminal (Command Prompt / PowerShell on Windows) navigate to the location where LighthouseManager(.exe) is located.
+## Installation
+Download from [Releases](../../releases/latest):
+- **Windows:** `LighthouseManager-win-Setup.exe`. Installs for your user (no administrator rights needed) and sets up everything: the service starts at login, the tray icon starts at login, and a Start menu entry. Uninstall through *Settings → Apps → Installed apps*. The installer isn't code-signed yet, so Windows SmartScreen may warn about an unknown publisher (*More info → Run anyway*).
+- **Linux:** `LighthouseManager.AppImage`. Make it executable (`chmod +x LighthouseManager.AppImage`) and run it once. It sets up a systemd user service, tray autostart and an application menu entry, all pointing to the AppImage file, so keep it in a permanent place (e.g. `~/Applications`); after moving it, run it once more. To uninstall, choose *Remove from system…* in the tray menu (or run `LighthouseManager.AppImage --uninstall`), then delete the AppImage.
+
+Then add your base stations: the tray flyout shows *No base stations configured* with a button to open the settings file. Put the addresses into `BaseStationAddresses` (find them with `LighthouseManager -d`, see below), save, and click *Restart service*.
+
+The tray app shows when a new version is available; *Update* installs it and restarts.
+
+Without installing, the zip downloads from the CI builds work as well; see [Manual setup](#manual-setup).
+
+# LighthouseManager (command-line tool)
+With a terminal (Command Prompt / PowerShell on Windows) navigate to the location where LighthouseManager(.exe) is located: `%LOCALAPPDATA%\LighthouseManager\current` for the Windows installer. With the AppImage, run it as `LighthouseManager.AppImage --cli -d` etc.
 
 Functions / parameters:
 
@@ -34,7 +45,13 @@ Based on success or not LighthouseManager will exit with different codes
 # LighthouseManagerService
 LighthouseManagerService is a little background service that watches for trigger processes in a given interval (default 1000ms): base stations are woken while any of them runs and put to sleep when all of them exited. By default the trigger is SteamVR (`vrserver`), but any VR runtime or application works.
 
-Settings in appsettings.json (`AppSettings` section):
+Settings are read from the `appsettings.json` next to the program (defaults), overridden by your settings file:
+- Windows: `%APPDATA%\LighthouseManager\appsettings.json`
+- Linux: `~/.config/lighthousemanager/appsettings.json`
+
+The service creates that file on first start. Restart the service after changing it. Logs are in `%LOCALAPPDATA%\LighthouseManager\logs` (Windows) or `~/.local/state/lighthousemanager/logs` (Linux).
+
+Settings (`AppSettings` section):
 - `BaseStationAddresses` comma separated Base Station MAC addresses (you can discover them with LighthouseManager `--discover` parameter)
 - `TriggerProcesses` comma separated process names, default `vrserver`. Examples: `vrserver` (SteamVR), `monado-service` (Monado), `wivrn-server` (WiVRn)
 - `Interval` polling interval in milliseconds (minimum 1000)
@@ -45,9 +62,10 @@ Settings in appsettings.json (`AppSettings` section):
 
 A manual wake/sleep (tray app, API) always wins: automatic handling only kicks in again when a trigger process starts or the last one exits.
 
-It is possible to just run LighthouseManagerService, or start it automatically: as a scheduled task or Windows Service on Windows, as a systemd unit on Linux.
+## Manual setup
+Only needed without the installer / AppImage, e.g. with the zip downloads of the CI builds. It is possible to just run LighthouseManagerService, or start it automatically: as a scheduled task or Windows Service on Windows, as a systemd unit on Linux.
 
-## Autostart on Windows (scheduled task, recommended)
+### Autostart on Windows (scheduled task)
 Runs the service in the background when you log in, under your own user. No administrator rights needed. Run in PowerShell (adjust `$dir` to where you extracted the files):
 ```powershell
 $dir = "C:\PATHTOEXTRACTEDFILES"
@@ -57,25 +75,25 @@ $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 -RestartCount 3 -
 Register-ScheduledTask -TaskName "LighthouseManager" -Action $action -Trigger $trigger -Settings $settings
 Start-ScheduledTask -TaskName "LighthouseManager"
 ```
-`-ExecutionTimeLimit 0` is required, otherwise Windows stops the task after 3 days. Logs are in `App_Data\logs` next to the executable.
+`-ExecutionTimeLimit 0` is required, otherwise Windows stops the task after 3 days.
 Uninstall with `Unregister-ScheduledTask -TaskName "LighthouseManager" -Confirm:$false`.
 
-## Installation as Windows Service
-Starts before anyone logs in and runs as the SYSTEM account. Requires administrator rights: open PowerShell as Administrator and run (`sc.exe`, because `sc` is a PowerShell alias; the space after `=` is required):
+### Installation as Windows Service
+Starts before anyone logs in and runs as the SYSTEM account, so it reads its settings from the SYSTEM profile (`C:\Windows\System32\config\systemprofile\AppData\Roaming\LighthouseManager`); putting `BaseStationAddresses` into the `appsettings.json` next to the program is easier here. Requires administrator rights: open PowerShell as Administrator and run (`sc.exe`, because `sc` is a PowerShell alias; the space after `=` is required):
 ```powershell
 sc.exe create LighthouseManager DisplayName= "LighthouseManager" binPath= "C:\PATHTOEXTRACTEDFILES\LighthouseManagerService.exe" start= auto
 sc.exe start LighthouseManager
 ```
 Uninstall with `sc.exe stop LighthouseManager` and `sc.exe delete LighthouseManager`.
 
-## Installation as systemd user service (Linux)
+### Installation as systemd user service (Linux)
 Extract the files to `~/LighthouseManager` (or adjust `ExecStart` in `lighthousemanager.service`), then:
 ```sh
 cp ~/LighthouseManager/lighthousemanager.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now lighthousemanager
 ```
-Logs: `journalctl --user -u lighthousemanager` or `App_Data/logs` next to the executable.
+Logs: `journalctl --user -u lighthousemanager` or `~/.local/state/lighthousemanager/logs`.
 Uninstall with `systemctl --user disable --now lighthousemanager` and remove the unit file.
 
 # LighthouseManager.Tray
@@ -84,13 +102,17 @@ Tray icon for Windows and Linux. The icon shows the overall state (green: on, ye
 - turn all on / sleep all
 - the automatic mode switch
 
-Right click opens a menu with the most important actions and Quit.
+Right click opens a menu with the most important actions, *Open settings*, *Restart service* and Quit.
 
 The tray app needs a running LighthouseManagerService. It connects to `http://127.0.0.1:47800` by default; use `--api-url <url>` or the environment variable `LIGHTHOUSEMANAGER_API_URL` for a different address.
 
-## Autostart
+### Autostart (manual setup)
+The installer / AppImage sets this up already.
 - **Windows:** press Win+R, enter `shell:startup` and put a shortcut to `LighthouseManager.Tray.exe` into the folder.
 - **Linux:** copy `lighthousemanager-tray.desktop` to `~/.config/autostart/` (adjust `Exec` if the files aren't in `~/LighthouseManager`). KDE Plasma shows tray icons out of the box. GNOME needs the "AppIndicator and KStatusNotifierItem Support" extension.
+
+# Building packages
+`build/pack.sh <linux-x64|win-x64> <version>` builds the AppImage or the Windows installer with [Velopack](https://velopack.io) (both on Linux; needs the .NET 10 SDK, `vpk` and, for the AppImage, `mksquashfs`). Pushing a tag like `v2.1.0` builds both and publishes a GitHub release (`.github/workflows/release.yml`).
 
 # License
 LighthouseManager is licensed under the [MIT License](LICENSE). The release builds include third-party components under their own licenses, see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

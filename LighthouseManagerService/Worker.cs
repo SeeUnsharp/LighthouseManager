@@ -24,6 +24,9 @@ public class Worker(ILogger<Worker> logger, IOptions<AppSettings> settings, Stat
         var addresses = controller.Addresses;
         logger.LogInformation("Interval: {Interval}, BaseStationAddresses: {Addresses}, TriggerProcesses: {Triggers}",
             settings.Value.Interval, string.Join(',', addresses.Select(MacAddress.Format)), string.Join(',', triggers));
+        if (addresses.Count == 0)
+            logger.LogWarning("No base stations configured. Add their addresses to {File} and restart the service.",
+                AppPaths.UserSettingsFile);
         logger.LogInformation("Start watching trigger processes.");
 
         var refreshInterval = TimeSpan.FromSeconds(settings.Value.StateRefreshInterval);

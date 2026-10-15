@@ -14,6 +14,8 @@ try
         ContentRootPath = AppContext.BaseDirectory
     });
 
+    UserSettings.AddTo(builder.Configuration);
+
     // Both are no-ops unless running as a Windows service or under systemd
     builder.Services.AddWindowsService(o => o.ServiceName = "LighthouseManager");
     builder.Services.AddSystemd();
@@ -23,8 +25,9 @@ try
     builder.Services.AddOptions<AppSettings>()
         .Bind(builder.Configuration.GetSection("AppSettings"))
         .Validate(s => s.Interval >= 1000, "AppSettings:Interval lower than 1000 milliseconds is not allowed.")
-        .Validate(s => s.TryGetAddresses(out var addresses) && addresses.Count > 0,
-            "AppSettings:BaseStationAddresses must contain at least one valid address (comma separated).")
+        // Empty is allowed: a freshly installed service runs, and the tray shows where to add base stations
+        .Validate(s => s.TryGetAddresses(out _),
+            "AppSettings:BaseStationAddresses contains an invalid address (comma separated MAC addresses).")
         .Validate(s => s.GetTriggerProcesses().Count > 0,
             "AppSettings:TriggerProcesses must contain at least one process name (comma separated).")
         .Validate(s => s.StateRefreshInterval >= 0, "AppSettings:StateRefreshInterval must not be negative.")

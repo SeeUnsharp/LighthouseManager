@@ -57,7 +57,9 @@ seconds later.
   "triggerActive": true,
   "triggerProcess": "vrserver",
   "triggerProcesses": ["vrserver"],
-  "stations": [ /* Station objects */ ]
+  "stations": [ /* Station objects */ ],
+  "settingsFile": "/home/user/.config/lighthousemanager/appsettings.json",
+  "version": "2.0.0"
 }
 ```
 
@@ -67,7 +69,9 @@ seconds later.
 | `triggerActive` | A trigger process is running |
 | `triggerProcess` | Name of the running trigger process, or `null` |
 | `triggerProcesses` | Configured trigger process names (`AppSettings:TriggerProcesses`) |
-| `stations` | All configured stations, in configuration order |
+| `stations` | All configured stations, in configuration order (empty until base stations are configured) |
+| `settingsFile` | The user settings file to add base stations to (restart the service afterwards) |
+| `version` | Version of the service |
 
 ## Endpoints
 
