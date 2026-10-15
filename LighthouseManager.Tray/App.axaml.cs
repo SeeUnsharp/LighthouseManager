@@ -14,6 +14,7 @@ public class App : Application
     private readonly CancellationTokenSource _shutdown = new();
     private ApiClient? _api;
     private FlyoutWindow? _flyout;
+    private SettingsWindow? _settings;
     private TrayIcon? _trayIcon;
     private MainViewModel? _viewModel;
 
@@ -35,11 +36,15 @@ public class App : Application
             TrayIcon.SetIcons(this, [_trayIcon]);
 
             _viewModel.Changed += (_, _) => UpdateTrayIcon();
+            _viewModel.SettingsRequested += (_, _) => ShowSettings();
             UpdateTrayIcon();
 
             _ = _viewModel.RunEventLoopAsync(_shutdown.Token);
             _ = _viewModel.RunUpdateLoopAsync(_shutdown.Token);
             if (desktop.Args?.Contains("--open") == true) _flyout.ShowFlyout();
+            // "--settings [stations|triggers|general]" opens the settings window, optionally on a tab
+            if (desktop.Args is { } args && Array.IndexOf(args, "--settings") is var index and >= 0)
+                ShowSettings(index + 1 < args.Length ? args[index + 1] : null);
             Program.Instance?.ListenForActivation(() =>
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => _flyout.ShowFlyout()));
             desktop.ShutdownRequested += (_, _) => _shutdown.Cancel();
@@ -54,6 +59,8 @@ public class App : Application
         open.Click += (_, _) => _flyout!.ShowFlyout();
         var wake = new NativeMenuItem("Turn all on") { Command = _viewModel!.WakeAllCommand };
         var sleep = new NativeMenuItem("Sleep all") { Command = _viewModel.SleepAllCommand };
+        var settingsWindow = new NativeMenuItem("Settings…");
+        settingsWindow.Click += (_, _) => ShowSettings();
         var find = new NativeMenuItem("Find base stations…");
         find.Click += (_, _) =>
         {
@@ -83,9 +90,17 @@ public class App : Application
 
         return
         [
-            open, new NativeMenuItemSeparator(), wake, sleep, new NativeMenuItemSeparator(), find, settings, restart,
+            open, settingsWindow, new NativeMenuItemSeparator(), wake, sleep, new NativeMenuItemSeparator(), find,
+            settings, restart,
             remove, new NativeMenuItemSeparator(), quit
         ];
+    }
+
+    private void ShowSettings(string? tab = null)
+    {
+        _flyout?.HideFlyout();
+        _settings ??= new SettingsWindow { DataContext = new SettingsViewModel(_viewModel!) };
+        _settings.ShowSettings(tab);
     }
 
     private void ToggleFlyout()

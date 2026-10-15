@@ -29,6 +29,14 @@ public static class Api
 
         api.MapGet("/stations", (StationController c) => c.GetSnapshot().Stations);
 
+        api.MapGet("/triggers", (StationController c) => new TriggerList(c.TriggerProcesses.ToArray()));
+
+        api.MapPut("/triggers", (TriggerList request, StationController c) =>
+            c.SetTriggerProcesses(request.Processes) ? Results.Ok(c.GetSnapshot()) : Results.BadRequest());
+
+        // Running applications, so UIs can offer them as trigger processes
+        api.MapGet("/processes", () => new TriggerList(RunningProcessNames()));
+
         api.MapPost("/discovery", async (StationController c, CancellationToken ct, int? seconds) =>
         {
             var duration = TimeSpan.FromSeconds(Math.Clamp(seconds ?? 10, 3, 60));
@@ -99,6 +107,27 @@ public static class Api
         });
     }
 
+    private static string[] RunningProcessNames()
+    {
+        var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var process in System.Diagnostics.Process.GetProcesses())
+        {
+            using (process)
+            {
+                try
+                {
+                    if (process.ProcessName.Length > 0) names.Add(process.ProcessName);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Exited while enumerating
+                }
+            }
+        }
+
+        return names.ToArray();
+    }
+
     private static async Task<IResult> ForStation(string address, StationController c,
         Func<ulong, Task<bool>> action)
     {
@@ -139,6 +168,8 @@ public sealed record AutomaticModeRequest(bool Enabled);
 
 public sealed record AddStationsRequest(string[] Addresses);
 
+public sealed record TriggerList(string[] Processes);
+
 /// <param name="Configured">Already in the configuration.</param>
 public sealed record DiscoveredStationInfo(string Address, string Name, bool Configured);
 
@@ -159,5 +190,6 @@ public sealed class CamelCaseEnumConverter<TEnum>() : JsonStringEnumConverter<TE
 [JsonSerializable(typeof(CommandResult))]
 [JsonSerializable(typeof(AutomaticModeRequest))]
 [JsonSerializable(typeof(AddStationsRequest))]
+[JsonSerializable(typeof(TriggerList))]
 [JsonSerializable(typeof(DiscoveryResult))]
 internal partial class ApiJsonContext : JsonSerializerContext;

@@ -22,10 +22,63 @@ public static class SystemIntegration
     ///     Windows: after Setup.exe installed the app (Velopack hook). Linux: on every start, so a moved or renamed
     ///     AppImage keeps working.
     /// </summary>
-    public static void Install()
+    /// <param name="update">Windows, after an update: keep the user's autostart choices.</param>
+    public static void Install(bool update = false)
     {
-        if (OperatingSystem.IsWindows()) WindowsIntegration.Install();
+        if (OperatingSystem.IsWindows()) WindowsIntegration.Install(update);
         else if (OperatingSystem.IsLinux()) LinuxIntegration.Install();
+    }
+
+    /// <summary>
+    ///     Whether the service starts at login; null if not managed (zip download, development build).
+    /// </summary>
+    public static bool? ServiceAutostart
+    {
+        get
+        {
+            if (!IsManaged) return null;
+            if (OperatingSystem.IsWindows()) return WindowsIntegration.IsServiceAutostartEnabled();
+            if (OperatingSystem.IsLinux()) return LinuxIntegration.IsServiceAutostartEnabled();
+            return null;
+        }
+        set
+        {
+            if (value is not { } enabled || !IsManaged) return;
+            if (OperatingSystem.IsWindows()) WindowsIntegration.SetServiceAutostart(enabled);
+            else if (OperatingSystem.IsLinux()) LinuxIntegration.SetServiceAutostart(enabled);
+        }
+    }
+
+    /// <summary>
+    ///     Whether the tray starts at login; null if not managed.
+    /// </summary>
+    public static bool? TrayAutostart
+    {
+        get
+        {
+            if (!IsManaged) return null;
+            if (OperatingSystem.IsWindows()) return WindowsIntegration.IsTrayAutostartEnabled();
+            if (OperatingSystem.IsLinux()) return LinuxIntegration.IsTrayAutostartEnabled();
+            return null;
+        }
+        set
+        {
+            if (value is not { } enabled || !IsManaged) return;
+            if (OperatingSystem.IsWindows()) WindowsIntegration.SetTrayAutostart(enabled);
+            else if (OperatingSystem.IsLinux()) LinuxIntegration.SetTrayAutostart(enabled);
+        }
+    }
+
+    /// <summary>
+    ///     Opens a folder in the file manager.
+    /// </summary>
+    public static void OpenFolder(string path)
+    {
+        Directory.CreateDirectory(path);
+        if (OperatingSystem.IsLinux())
+            Process.Start(new ProcessStartInfo("xdg-open", [path]) { UseShellExecute = false })?.Dispose();
+        else
+            Process.Start(new ProcessStartInfo("explorer.exe", [path]) { UseShellExecute = false })?.Dispose();
     }
 
     public static void Uninstall()
@@ -122,7 +175,9 @@ public static class SystemIntegration
         }
     }
 
-    internal static int Run(string file, params string[] args)
+    internal static int Run(string file, params string[] args) => RunWithOutput(file, args).ExitCode;
+
+    internal static (int ExitCode, string Output) RunWithOutput(string file, params string[] args)
     {
         try
         {
@@ -131,15 +186,16 @@ public static class SystemIntegration
                 UseShellExecute = false, CreateNoWindow = true,
                 RedirectStandardOutput = true, RedirectStandardError = true
             });
-            if (process == null) return -1;
-            process.StandardOutput.ReadToEnd();
-            process.StandardError.ReadToEnd();
+            if (process == null) return (-1, "");
+            var stderr = process.StandardError.ReadToEndAsync();
+            var output = process.StandardOutput.ReadToEnd();
+            stderr.Wait();
             process.WaitForExit();
-            return process.ExitCode;
+            return (process.ExitCode, output);
         }
         catch (Exception)
         {
-            return -1;
+            return (-1, "");
         }
     }
 }

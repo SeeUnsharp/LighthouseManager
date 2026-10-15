@@ -40,6 +40,8 @@ public sealed record AutomaticModeRequest(bool Enabled);
 
 public sealed record AddStationsRequest(string[] Addresses);
 
+public sealed record TriggerList(string[] Processes);
+
 public sealed record DiscoveredStationInfo(string Address, string Name, bool Configured);
 
 public sealed record DiscoveryResult(DiscoveredStationInfo[] Stations);
@@ -49,5 +51,6 @@ public sealed record DiscoveryResult(DiscoveredStationInfo[] Stations);
 [JsonSerializable(typeof(CommandResult))]
 [JsonSerializable(typeof(AutomaticModeRequest))]
 [JsonSerializable(typeof(AddStationsRequest))]
+[JsonSerializable(typeof(TriggerList))]
 [JsonSerializable(typeof(DiscoveryResult))]
 internal partial class ApiJsonContext : JsonSerializerContext;

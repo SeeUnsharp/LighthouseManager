@@ -11,6 +11,9 @@ namespace LighthouseManagerService;
 ///     the executable. Installed builds can't keep user changes in the app folder (read-only AppImage, replaced on
 ///     updates).
 /// </summary>
+[System.Text.Json.Serialization.JsonSerializable(typeof(string))]
+internal partial class UserSettingsJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
+
 internal static class UserSettings
 {
     // BaseStationAddresses is commented out: an empty value here would override addresses configured in the
@@ -28,41 +31,60 @@ internal static class UserSettings
 
         """;
 
-    // The commented out example entry of the template
-    private static readonly Regex ExampleEntry = new(
-        "^(?<indent>[ \\t]*)//[ \\t]*\"BaseStationAddresses\"[^\\r\\n]*", RegexOptions.Multiline);
-
-    // The value of an existing (not commented out) BaseStationAddresses entry
-    private static readonly Regex AddressesEntry = new(
-        "^(?<prefix>\\s*\"BaseStationAddresses\"\\s*:\\s*)\"[^\"]*\"", RegexOptions.Multiline);
-
     /// <summary>
     ///     Writes the base station list to the user settings file, keeping comments and other settings.
     /// </summary>
     public static void SaveBaseStationAddresses(IEnumerable<ulong> addresses)
     {
-        var value = string.Join(",", addresses.Select(MacAddress.Format));
+        Save("BaseStationAddresses", string.Join(",", addresses.Select(MacAddress.Format)));
+    }
+
+    /// <summary>
+    ///     Writes one AppSettings entry to the user settings file, keeping comments and other settings.
+    /// </summary>
+    /// <param name="value">string or bool</param>
+    public static void Save(string key, object value)
+    {
+        var literal = value switch
+        {
+            bool b => b ? "true" : "false",
+            string s => JsonSerializer.Serialize(s, UserSettingsJsonContext.Default.String),
+            _ => throw new ArgumentException($"Unsupported setting type {value.GetType()}", nameof(value))
+        };
+        var name = Regex.Escape(key);
         var file = AppPaths.UserSettingsFile;
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         var text = File.Exists(file) ? File.ReadAllText(file) : Template;
 
-        if (AddressesEntry.IsMatch(text))
+        // An existing (not commented out) entry: replace its value
+        var existing = new Regex($"^(?<prefix>\\s*\"{name}\"\\s*:\\s*)(?:\"(?:[^\"\\\\]|\\\\.)*\"|true|false|-?\\d+)",
+            RegexOptions.Multiline);
+        // The commented out example of the template: becomes the entry (it's the last one of the section, so no
+        // trailing comma is needed)
+        var example = new Regex($"^(?<indent>[ \\t]*)//[ \\t]*\"{name}\"[^\\r\\n]*", RegexOptions.Multiline);
+        var section = new Regex("\"AppSettings\"\\s*:\\s*\\{");
+
+        if (existing.IsMatch(text))
         {
-            text = AddressesEntry.Replace(text, m => $"{m.Groups["prefix"].Value}\"{value}\"", 1);
+            text = existing.Replace(text, m => m.Groups["prefix"].Value + literal, 1);
         }
-        else if (ExampleEntry.IsMatch(text))
+        else if (example.IsMatch(text))
         {
-            // Template: the example is the last entry of the section, so no trailing comma is needed
-            text = ExampleEntry.Replace(text, m => $"{m.Groups["indent"].Value}\"BaseStationAddresses\": \"{value}\"", 1);
+            text = example.Replace(text, m => $"{m.Groups["indent"].Value}\"{key}\": {literal}", 1);
+        }
+        else if (section.IsMatch(text))
+        {
+            // First entry of the section; .NET's JSON configuration accepts the trailing comma this may leave
+            text = section.Replace(text, m => $"{m.Value}\n    \"{key}\": {literal},", 1);
         }
         else
         {
-            // No entry yet: add it through the JSON model (drops comments, but keeps every setting)
+            // No AppSettings section: add it through the JSON model (drops comments, keeps every setting)
             var root = JsonNode.Parse(text, documentOptions: new JsonDocumentOptions
                 { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }) as JsonObject ?? [];
             if (root["AppSettings"] is not JsonObject appSettings)
                 root["AppSettings"] = appSettings = [];
-            appSettings["BaseStationAddresses"] = value;
+            appSettings[key] = JsonNode.Parse(literal);
             text = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine;
         }
 

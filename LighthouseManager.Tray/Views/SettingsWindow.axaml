@@ -1,0 +1,261 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LighthouseManager.Tray.ViewModels"
+        x:Class="LighthouseManager.Tray.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        Title="LighthouseManager Settings"
+        Width="580" Height="620" MinWidth="480" MinHeight="420"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Styles>
+        <Style Selector="TextBlock.secondary">
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="TextBlock.heading">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,8,0,0" />
+        </Style>
+        <Style Selector="Button.small">
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="Ellipse.dot">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Height" Value="10" />
+            <Setter Property="Fill" Value="Gray" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Ellipse.dot.awake">
+            <Setter Property="Fill" Value="#2EA043" />
+        </Style>
+        <Style Selector="Ellipse.dot.busy">
+            <Setter Property="Fill" Value="#D29922" />
+        </Style>
+        <Style Selector="Ellipse.dot.error">
+            <Setter Property="Fill" Value="#DA3633" />
+        </Style>
+    </Window.Styles>
+
+    <DockPanel Margin="16">
+        <TextBlock DockPanel.Dock="Bottom" Classes="secondary" Foreground="#DA3633" TextWrapping="Wrap"
+                   Margin="0,8,0,0" Text="{Binding Main.LastError}"
+                   IsVisible="{Binding Main.LastError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <TextBlock DockPanel.Dock="Bottom" Classes="secondary" Foreground="#DA3633" Margin="0,8,0,0"
+                   Text="The service is not running, settings can't be changed." IsVisible="{Binding !Main.Connected}" />
+
+        <TabControl x:Name="Tabs">
+            <!-- ================= Base stations ================= -->
+            <TabItem Header="Base stations">
+                <ScrollViewer>
+                    <StackPanel Spacing="10" Margin="0,8,8,0" IsEnabled="{Binding Main.Connected}">
+                        <TextBlock Classes="secondary" TextWrapping="Wrap"
+                                   Text="The base stations LighthouseManager controls. Changes take effect immediately." />
+
+                        <TextBlock Classes="secondary" Text="No base stations configured yet."
+                                   IsVisible="{Binding !Main.HasStations}" />
+                        <ItemsControl ItemsSource="{Binding Main.Stations}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="8" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:StationViewModel">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <Ellipse Classes="dot" Margin="0,0,10,0"
+                                                 Classes.awake="{Binding IsAwake}"
+                                                 Classes.busy="{Binding Busy}"
+                                                 Classes.error="{Binding HasError}" />
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayName}" />
+                                            <TextBlock Classes="secondary">
+                                                <Run Text="{Binding Address}" />
+                                                <Run Text=" · " />
+                                                <Run Text="{Binding StateText}" />
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
+                                                    VerticalAlignment="Center">
+                                            <Button Classes="small" Content="Identify"
+                                                    Command="{Binding IdentifyCommand}" IsVisible="{Binding IsAwake}"
+                                                    ToolTip.Tip="Flash the LED" />
+                                            <Button Classes="small" Content="Remove" Command="{Binding RemoveCommand}"
+                                                    ToolTip.Tip="Stop controlling this base station" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Separator />
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Classes="heading" Text="Add base stations" Margin="0" VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Content="Find base stations"
+                                    Command="{Binding Main.FindStationsCommand}" />
+                        </Grid>
+                        <StackPanel Spacing="6" IsVisible="{Binding Main.IsDiscovering}">
+                            <TextBlock Text="Searching for base stations…" />
+                            <ProgressBar IsIndeterminate="True" />
+                        </StackPanel>
+                        <StackPanel Spacing="6" IsVisible="{Binding Main.HasFound}">
+                            <ItemsControl ItemsSource="{Binding Main.Found}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FoundStationViewModel">
+                                        <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Classes="small" Content="Add selected" Command="{Binding Main.AddFoundCommand}" />
+                                <Button Classes="small" Content="Cancel" Command="{Binding Main.CloseDiscoveryCommand}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <TextBlock Classes="secondary" TextWrapping="Wrap" Text="{Binding Main.DiscoveryMessage}"
+                                   IsVisible="{Binding Main.DiscoveryMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ================= Trigger applications ================= -->
+            <TabItem Header="Trigger applications">
+                <ScrollViewer>
+                    <StackPanel Spacing="10" Margin="0,8,8,0" IsEnabled="{Binding Main.Connected}">
+                        <TextBlock Classes="secondary" TextWrapping="Wrap"
+                                   Text="With automatic mode on, the base stations turn on while one of these applications runs and go to sleep when all of them have exited." />
+
+                        <ItemsControl ItemsSource="{Binding Triggers}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="6" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:TriggerItem">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Classes="small" Content="Remove"
+                                                Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).RemoveTriggerCommand}"
+                                                CommandParameter="{Binding}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Separator />
+                        <TextBlock Classes="heading" Text="Add a trigger application" />
+
+                        <StackPanel Spacing="6" IsVisible="{Binding HasSuggestedTriggers}">
+                            <TextBlock Classes="secondary" Text="VR runtimes:" />
+                            <ItemsControl ItemsSource="{Binding SuggestedTriggers}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel ItemSpacing="6" LineSpacing="6" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:TriggerItem">
+                                        <Button Classes="small" Content="{Binding Description}"
+                                                ToolTip.Tip="{Binding Process}"
+                                                Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).AddProcessCommand}"
+                                                CommandParameter="{Binding Process}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <TextBlock Classes="secondary" Text="Process name (without .exe):" />
+                        <Grid ColumnDefinitions="*,8,Auto">
+                            <TextBox Text="{Binding NewTrigger}" PlaceholderText="e.g. vrserver" />
+                            <Button Grid.Column="2" Content="Add" Command="{Binding AddTriggerCommand}" IsDefault="True" />
+                        </Grid>
+
+                        <Button Content="Choose from running applications…" Command="{Binding ShowProcessesCommand}" />
+                        <StackPanel Spacing="6" IsVisible="{Binding IsProcessListVisible}">
+                            <TextBox Text="{Binding ProcessFilter}" PlaceholderText="Filter" />
+                            <Border BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}" BorderThickness="1"
+                                    Height="220">
+                                <ScrollViewer>
+                                    <ItemsControl ItemsSource="{Binding FilteredProcesses}" Margin="6">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="x:String">
+                                                <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                                                    <TextBlock Text="{Binding}" VerticalAlignment="Center" />
+                                                    <Button Grid.Column="1" Classes="small" Content="Add"
+                                                            Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).AddProcessCommand}"
+                                                            CommandParameter="{Binding}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ================= General ================= -->
+            <TabItem Header="General">
+                <ScrollViewer>
+                    <StackPanel Spacing="10" Margin="0,8,8,0">
+                        <Grid ColumnDefinitions="*,Auto" IsEnabled="{Binding Main.Connected}">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Automatic mode" />
+                                <TextBlock Classes="secondary" Text="Wake and sleep with the trigger applications" />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" OnContent="" OffContent=""
+                                          IsChecked="{Binding Main.AutomaticMode, Mode=OneWay}"
+                                          Command="{Binding Main.SetAutomaticModeCommand}"
+                                          CommandParameter="{Binding $self.IsChecked}" />
+                        </Grid>
+
+                        <Separator />
+                        <TextBlock Classes="heading" Text="Start at login" />
+                        <CheckBox Content="Start the service (controls the base stations in the background)"
+                                  IsChecked="{Binding ServiceAutostart}" IsEnabled="{Binding CanManageAutostart}" />
+                        <CheckBox Content="Start the tray icon" IsChecked="{Binding TrayAutostart}"
+                                  IsEnabled="{Binding CanManageAutostart}" />
+                        <TextBlock Classes="secondary" TextWrapping="Wrap" IsVisible="{Binding !CanManageAutostart}"
+                                   Text="Only available when installed with the installer (Windows) or as AppImage (Linux). See the README for setting up autostart manually." />
+
+                        <Separator />
+                        <TextBlock Classes="heading" Text="Files" />
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Settings file" />
+                                <TextBlock Classes="secondary" Text="{Binding Main.SettingsFile}" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Classes="small" Content="Open" VerticalAlignment="Center"
+                                    Command="{Binding Main.OpenSettingsCommand}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Log files" />
+                                <TextBlock Classes="secondary" Text="{Binding LogDirectory}" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Classes="small" Content="Open" VerticalAlignment="Center"
+                                    Command="{Binding OpenLogsCommand}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding Main.CanManageService}">
+                            <TextBlock Text="Restart the service" VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Classes="small" Content="Restart"
+                                    Command="{Binding Main.RestartServiceCommand}" />
+                        </Grid>
+
+                        <Separator />
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock VerticalAlignment="Center">
+                                <Run Text="LighthouseManager " />
+                                <Run Text="{Binding Main.VersionText}" />
+                            </TextBlock>
+                            <Button Grid.Column="1" Classes="small" Content="{Binding Main.UpdateText}"
+                                    Command="{Binding Main.InstallUpdateCommand}"
+                                    IsVisible="{Binding Main.IsUpdateAvailable}" />
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

@@ -19,8 +19,7 @@ public class Worker(ILogger<Worker> logger, IOptions<AppSettings> settings, Stat
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var triggers = settings.Value.GetTriggerProcesses();
-        var triggerSet = new HashSet<string>(triggers, StringComparer.OrdinalIgnoreCase);
+        var triggers = controller.TriggerProcesses;
         var addresses = controller.Addresses;
         logger.LogInformation("Interval: {Interval}, BaseStationAddresses: {Addresses}, TriggerProcesses: {Triggers}",
             settings.Value.Interval, string.Join(',', addresses.Select(MacAddress.Format)), string.Join(',', triggers));
@@ -39,7 +38,8 @@ public class Worker(ILogger<Worker> logger, IOptions<AppSettings> settings, Stat
             while (!stoppingToken.IsCancellationRequested)
             {
                 var now = DateTime.UtcNow;
-                var runningTrigger = FindRunningTrigger(triggers, triggerSet);
+                // Current list: trigger processes can be changed through the API at any time
+                var runningTrigger = FindRunningTrigger(controller.TriggerProcesses);
                 controller.SetActiveTrigger(runningTrigger);
 
                 // Faulted counts as failed; reading Result of a faulted task would throw and stop the service
@@ -108,8 +108,9 @@ public class Worker(ILogger<Worker> logger, IOptions<AppSettings> settings, Stat
     }
 
     /// <returns>The first configured trigger (in configuration order) that is running, or null.</returns>
-    private static string? FindRunningTrigger(IReadOnlyList<string> triggers, HashSet<string> triggerSet)
+    private static string? FindRunningTrigger(IReadOnlyList<string> triggers)
     {
+        var triggerSet = new HashSet<string>(triggers, StringComparer.OrdinalIgnoreCase);
         // One pass over the process table per poll, independent of the number of triggers
         var running = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var process in Process.GetProcesses())

@@ -87,7 +87,7 @@ public sealed class SingleInstance : IDisposable
     }
 
     // Same location as the service's state directory (AppPaths in Core, which the tray doesn't reference)
-    private static string StateDirectory => OperatingSystem.IsWindows()
+    internal static string StateDirectory => OperatingSystem.IsWindows()
         ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LighthouseManager")
         : Path.Combine(
             Environment.GetEnvironmentVariable("XDG_STATE_HOME") is { Length: > 0 } state && Path.IsPathRooted(state)

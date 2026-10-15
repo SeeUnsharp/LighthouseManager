@@ -43,6 +43,23 @@ public sealed class ApiClient(Uri baseAddress) : IDisposable
         return (await response.Content.ReadFromJsonAsync(ApiJsonContext.Default.StatusSnapshot))!;
     }
 
+    public async Task<StatusSnapshot> SetTriggersAsync(IEnumerable<string> processes)
+    {
+        using var response = await _http.PutAsJsonAsync("api/triggers", new TriggerList(processes.ToArray()),
+            ApiJsonContext.Default.TriggerList);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync(ApiJsonContext.Default.StatusSnapshot))!;
+    }
+
+    /// <summary>
+    ///     Names of the applications running on the service's machine.
+    /// </summary>
+    public async Task<string[]> GetProcessesAsync()
+    {
+        var list = await _http.GetFromJsonAsync("api/processes", ApiJsonContext.Default.TriggerList);
+        return list?.Processes ?? [];
+    }
+
     public async Task<StatusSnapshot> RemoveStationAsync(string address)
     {
         using var response = await _http.DeleteAsync($"api/stations/{Uri.EscapeDataString(address)}");
