@@ -45,11 +45,28 @@ Settings in appsettings.json (`AppSettings` section):
 
 A manual wake/sleep (tray app, API) always wins: automatic handling only kicks in again when a trigger process starts or the last one exits.
 
-It is possible to just run LighthouseManagerService or install it as a Windows Service / systemd unit (recommended).
+It is possible to just run LighthouseManagerService, or start it automatically: as a scheduled task or Windows Service on Windows, as a systemd unit on Linux.
+
+## Autostart on Windows (scheduled task, recommended)
+Runs the service in the background when you log in, under your own user. No administrator rights needed. Run in PowerShell (adjust `$dir` to where you extracted the files):
+```powershell
+$dir = "C:\PATHTOEXTRACTEDFILES"
+$action = New-ScheduledTaskAction -Execute "$dir\LighthouseManagerService.exe" -WorkingDirectory $dir
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+Register-ScheduledTask -TaskName "LighthouseManager" -Action $action -Trigger $trigger -Settings $settings
+Start-ScheduledTask -TaskName "LighthouseManager"
+```
+`-ExecutionTimeLimit 0` is required, otherwise Windows stops the task after 3 days. Logs are in `App_Data\logs` next to the executable.
+Uninstall with `Unregister-ScheduledTask -TaskName "LighthouseManager" -Confirm:$false`.
 
 ## Installation as Windows Service
-Open a Command Prompt as Administrator and type `sc create LighthouseManager DisplayName="LighthouseManager" binPath="C:\PATHTOEXTRACTEDFILES\LighthouseManagerService.exe"` to create the Windows Service and then `sc start LighthouseManager` to start it. For auto start type `sc config LighthouseManager start=auto`.
-You can uninstall it with `sc delete LighthouseManager` (If you want stop it before uninstalling with `sc stop LighthouseManager`).
+Starts before anyone logs in and runs as the SYSTEM account. Requires administrator rights: open PowerShell as Administrator and run (`sc.exe`, because `sc` is a PowerShell alias; the space after `=` is required):
+```powershell
+sc.exe create LighthouseManager DisplayName= "LighthouseManager" binPath= "C:\PATHTOEXTRACTEDFILES\LighthouseManagerService.exe" start= auto
+sc.exe start LighthouseManager
+```
+Uninstall with `sc.exe stop LighthouseManager` and `sc.exe delete LighthouseManager`.
 
 ## Installation as systemd user service (Linux)
 Extract the files to `~/LighthouseManager` (or adjust `ExecStart` in `lighthousemanager.service`), then:
