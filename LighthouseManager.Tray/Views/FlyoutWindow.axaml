@@ -50,6 +50,8 @@
                                 ToolTip.Tip="Search for base stations nearby and add them" />
                         <Button Classes="small" Content="Refresh" Command="{Binding RefreshCommand}"
                                 ToolTip.Tip="Read the current state of all base stations" />
+                        <Button Classes="small" Content="⚙" Command="{Binding ShowSettingsCommand}"
+                                ToolTip.Tip="Settings" />
                     </StackPanel>
                 </Grid>
 

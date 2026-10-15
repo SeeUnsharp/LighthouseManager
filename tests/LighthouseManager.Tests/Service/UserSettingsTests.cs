@@ -8,6 +8,8 @@ namespace LighthouseManager.Tests.Service;
 ///     Saving the base station list into the user settings file. Uses a temporary XDG_CONFIG_HOME, so it only runs
 ///     on Linux (where CI runs the tests).
 /// </summary>
+// Changes process wide environment variables: must not run in parallel with other such tests
+[Collection("Environment variables")]
 public sealed class UserSettingsTests : IDisposable
 {
     private readonly string? _previous = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");

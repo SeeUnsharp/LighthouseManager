@@ -28,7 +28,7 @@ internal static class Program
         if (OperatingSystem.IsWindows())
             velopack = velopack
                 .OnAfterInstallFastCallback(_ => SystemIntegration.Install())
-                .OnAfterUpdateFastCallback(_ => SystemIntegration.Install())
+                .OnAfterUpdateFastCallback(_ => SystemIntegration.Install(update: true))
                 // The service runs from the app folder, its files must not be in use while they are replaced
                 .OnBeforeUpdateFastCallback(_ => SystemIntegration.StopService())
                 .OnBeforeUninstallFastCallback(_ => SystemIntegration.Uninstall());

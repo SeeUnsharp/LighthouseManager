@@ -42,6 +42,8 @@ public sealed partial class MainViewModel : ObservableObject
 
     [ObservableProperty] private string? _settingsFile;
 
+    [ObservableProperty] private string[] _triggerProcesses = [];
+
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(VersionText))]
     private string? _serviceVersion;
 
@@ -143,6 +145,21 @@ public sealed partial class MainViewModel : ObservableObject
             }
         }
     }
+
+    public ApiClient Api => _api;
+
+    /// <summary>
+    ///     Raised by the flyout's settings button; the app opens the settings window.
+    /// </summary>
+    public event EventHandler? SettingsRequested;
+
+    [RelayCommand]
+    private void ShowSettings() => SettingsRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    ///     Applies a status returned by a command (also arrives through the event stream).
+    /// </summary>
+    public void ApplyStatus(StatusSnapshot snapshot) => Apply(snapshot);
 
     /// <summary>
     ///     Runs a command; the resulting state arrives through the event stream as well.
@@ -330,6 +347,7 @@ public sealed partial class MainViewModel : ObservableObject
         AutomaticMode = snapshot.AutomaticMode;
         TriggerProcess = snapshot.TriggerProcess;
         SettingsFile = snapshot.SettingsFile;
+        if (!TriggerProcesses.SequenceEqual(snapshot.TriggerProcesses)) TriggerProcesses = snapshot.TriggerProcesses;
         ServiceVersion = snapshot.Version;
 
         // Keep view models (and their bindings) stable, the station list only changes with the service config

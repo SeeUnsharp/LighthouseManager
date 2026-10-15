@@ -51,11 +51,17 @@ public class AppSettings
         return MacAddress.TryParseList(SplitList(BaseStationAddresses), out addresses, out _);
     }
 
-    public IReadOnlyList<string> GetTriggerProcesses()
+    public IReadOnlyList<string> GetTriggerProcesses() => NormalizeTriggerProcesses(SplitList(TriggerProcesses));
+
+    /// <summary>
+    ///     Trimmed, without ".exe" (process names don't have it), without empty and duplicate entries.
+    /// </summary>
+    public static IReadOnlyList<string> NormalizeTriggerProcesses(IEnumerable<string> names)
     {
-        // Process.GetProcessesByName expects the name without ".exe"
-        return SplitList(TriggerProcesses)
+        return names
+            .Select(p => p.Trim())
             .Select(p => p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? p[..^4] : p)
+            .Where(p => p.Length > 0 && !p.Contains(','))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
     }

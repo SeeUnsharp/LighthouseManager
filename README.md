@@ -53,9 +53,9 @@ The service creates that file on first start. Restart the service after changing
 
 Settings (`AppSettings` section):
 - `BaseStationAddresses` comma separated Base Station MAC addresses. The tray app finds and adds them for you; you can also discover them with LighthouseManager `--discover` parameter
-- `TriggerProcesses` comma separated process names, default `vrserver`. Examples: `vrserver` (SteamVR), `monado-service` (Monado), `wivrn-server` (WiVRn)
+- `TriggerProcesses` comma separated process names, default `vrserver` (managed in the tray app's settings). Examples: `vrserver` (SteamVR), `monado-service` (Monado), `wivrn-server` (WiVRn)
 - `Interval` polling interval in milliseconds (minimum 1000)
-- `AutomaticMode` whether trigger processes wake/sleep the base stations (default `true`, can be toggled at runtime in the tray app / API)
+- `AutomaticMode` whether trigger processes wake/sleep the base stations (default `true`; the tray app / API change and save it)
 - `StateRefreshInterval` how often the power state of the base stations is read, in seconds (default `300`, `0` = off)
 - `ApiUrl` address of the [HTTP API](docs/API.md) (default `http://127.0.0.1:47800`, empty = off). The API has no authentication, keep it on loopback
 - `AllowedOrigins` comma separated browser origins allowed to use the API, for web based UIs (default: none)
@@ -103,6 +103,13 @@ Tray icon for Windows and Linux. The icon shows the overall state (green: on, ye
 - the state of every base station with buttons to turn it on, put it to sleep or identify it (flash the LED; only shown while the station is running, because identify would wake a sleeping one)
 - turn all on / sleep all
 - the automatic mode switch
+
+*Settings* (gear button in the flyout, or *Settings…* in the tray menu) has three pages:
+- **Base stations:** the configured base stations with *Remove*, and *Find base stations* to add more
+- **Trigger applications:** the applications that wake the base stations; add VR runtimes with one click (SteamVR, Monado, WiVRn), by process name, or by choosing from the running applications
+- **General:** automatic mode, start the service / the tray icon at login (installed builds), settings file and log folder, version and updates
+
+`LighthouseManager.Tray --settings [stations|triggers|general]` opens the settings directly.
 
 Only one tray app runs per user: starting it again (Start menu, autostart, AppImage) opens the flyout of the running one. Right click opens a menu with the most important actions, *Open settings*, *Restart service* and Quit.
 

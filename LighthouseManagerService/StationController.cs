@@ -15,7 +15,7 @@ public sealed class StationController
     private readonly BaseStationManager _manager;
     private readonly Dictionary<ulong, StationInfo> _stations;
     private readonly List<Channel<StatusSnapshot>> _subscribers = [];
-    private readonly IReadOnlyList<string> _triggerProcesses;
+    private IReadOnlyList<string> _triggerProcesses;
     private readonly object _sync = new();
 
     private readonly Dictionary<CancellationTokenSource, IReadOnlyList<ulong>> _refreshes = [];
@@ -66,8 +66,36 @@ public sealed class StationController
             }
 
             _logger.LogInformation("Automatic mode {State}", value ? "enabled" : "disabled");
+            UserSettings.Save("AutomaticMode", value);
             Publish();
         }
+    }
+
+    /// <summary>
+    ///     Process names that wake the base stations while running.
+    /// </summary>
+    public IReadOnlyList<string> TriggerProcesses
+    {
+        get
+        {
+            lock (_sync) return _triggerProcesses;
+        }
+    }
+
+    /// <summary>
+    ///     Replaces the trigger processes (saved to the user settings file).
+    /// </summary>
+    /// <returns>false if no valid process name is left.</returns>
+    public bool SetTriggerProcesses(IEnumerable<string> names)
+    {
+        var normalized = AppSettings.NormalizeTriggerProcesses(names);
+        if (normalized.Count == 0) return false;
+
+        lock (_sync) _triggerProcesses = normalized;
+        UserSettings.Save("TriggerProcesses", string.Join(",", normalized));
+        _logger.LogInformation("Trigger processes: {Triggers}", string.Join(",", normalized));
+        Publish();
+        return true;
     }
 
     /// <summary>

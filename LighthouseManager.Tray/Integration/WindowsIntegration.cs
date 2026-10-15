@@ -1,5 +1,6 @@
 using System.Runtime.Versioning;
 using System.Security;
+using System.Xml.Linq;
 using Microsoft.Win32;
 
 namespace LighthouseManager.Tray.Integration;
@@ -20,14 +21,57 @@ internal static class WindowsIntegration
 
     private static string AppRoot => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, ".."));
 
-    public static void Install()
+    /// <param name="update">After an update: keep the user's autostart choices instead of enabling both.</param>
+    public static void Install(bool update)
     {
-        RegisterTask();
+        var serviceAutostart = !update || IsServiceAutostartEnabled() != false;
+        var trayAutostart = !update || IsTrayAutostartEnabled();
+
+        RegisterTask(serviceAutostart);
         StartService();
+        SetTrayAutostart(trayAutostart);
+    }
+
+    /// <returns>null if the task doesn't exist.</returns>
+    public static bool? IsServiceAutostartEnabled()
+    {
+        var (exitCode, output) = SystemIntegration.RunWithOutput("schtasks.exe", "/Query", "/TN", TaskName, "/XML");
+        if (exitCode != 0) return null;
+        try
+        {
+            // schtasks may prefix a byte order mark
+            var xml = XDocument.Parse(output.Trim('\uFEFF', ' ', '\r', '\n'));
+            var ns = xml.Root!.Name.Namespace;
+            var enabled = xml.Descendants(ns + "LogonTrigger").Elements(ns + "Enabled").FirstOrDefault();
+            return enabled == null || enabled.Value.Trim() != "false";
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    // The task stays enabled either way (a disabled task can't be started on demand either); only its logon
+    // trigger is switched
+    public static void SetServiceAutostart(bool enabled) => RegisterTask(enabled);
+
+    public static bool IsTrayAutostartEnabled()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RunKey);
+        return key?.GetValue(RunValue) != null;
+    }
+
+    public static void SetTrayAutostart(bool enabled)
+    {
+        using var key = Registry.CurrentUser.CreateSubKey(RunKey);
+        if (!enabled)
+        {
+            key.DeleteValue(RunValue, false);
+            return;
+        }
 
         // The stub in the app root survives updates, unlike the versioned files in current\
         var stub = Path.Combine(AppRoot, "LighthouseManager.Tray.exe");
-        using var key = Registry.CurrentUser.CreateSubKey(RunKey);
         key.SetValue(RunValue, $"\"{(File.Exists(stub) ? stub : Environment.ProcessPath)}\"");
     }
 
@@ -43,7 +87,7 @@ internal static class WindowsIntegration
 
     public static void StartService() => SystemIntegration.Run("schtasks.exe", "/Run", "/TN", TaskName);
 
-    private static void RegisterTask()
+    private static void RegisterTask(bool atLogon)
     {
         // current\ keeps its path across updates
         var service = Path.Combine(AppContext.BaseDirectory, SystemIntegration.ServiceExecutable + ".exe");
@@ -58,7 +102,7 @@ internal static class WindowsIntegration
               </RegistrationInfo>
               <Triggers>
                 <LogonTrigger>
-                  <Enabled>true</Enabled>
+                  <Enabled>{(atLogon ? "true" : "false")}</Enabled>
                   <UserId>{SecurityElement.Escape(user)}</UserId>
                 </LogonTrigger>
               </Triggers>

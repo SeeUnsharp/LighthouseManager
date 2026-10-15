@@ -79,7 +79,10 @@ seconds later.
 |---|---|---|
 | `GET` | `/api/status` | Current [status](#status) |
 | `GET` | `/api/events` | Live status as Server-Sent Events, see [Events](#events) |
-| `PUT` | `/api/automatic` | Body `{"enabled": true\|false}`, returns the status |
+| `PUT` | `/api/automatic` | Body `{"enabled": true\|false}`, returns the status; saved to the user settings file |
+| `GET` | `/api/triggers` | Trigger processes: `{"processes": ["vrserver"]}` |
+| `PUT` | `/api/triggers` | Body `{"processes": ["vrserver", "monado-service"]}`: replace the trigger processes (trimmed, without `.exe`, at least one; otherwise `400`), returns the status; takes effect immediately and is saved |
+| `GET` | `/api/processes` | Names of the running applications, `{"processes": [...]}`, to offer as trigger processes |
 | `GET` | `/api/stations` | Array of [stations](#station) |
 | `POST` | `/api/stations/wake` | Wake all stations |
 | `POST` | `/api/stations/sleep` | Put all stations to sleep |

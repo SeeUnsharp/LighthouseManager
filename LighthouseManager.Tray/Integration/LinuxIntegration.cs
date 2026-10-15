@@ -39,8 +39,10 @@ internal static class LinuxIntegration
         var exec = Quote(appImage);
 
         WriteIfChanged(IconFile, Icon());
-        WriteIfChanged(MenuFile, DesktopEntry(exec, autostart: false));
-        WriteIfChanged(AutostartFile, DesktopEntry(exec, autostart: true));
+        WriteIfChanged(MenuFile, DesktopEntry(exec, autostart: false, hidden: false));
+        // Keep the user's choice (Hidden=true = autostart off); only the path is updated
+        WriteIfChanged(AutostartFile, DesktopEntry(exec, autostart: true,
+            hidden: File.Exists(AutostartFile) && !IsTrayAutostartEnabled()));
 
         // Type=exec, not notify: the AppImage entry point forwards to the service binary, and .NET only sends the
         // readiness notification when its parent process is systemd
@@ -58,18 +60,36 @@ internal static class LinuxIntegration
             WantedBy=default.target
 
             """;
+        var firstInstall = !File.Exists(UnitFile);
         if (WriteIfChanged(UnitFile, System.Text.Encoding.UTF8.GetBytes(unit)))
         {
             Systemctl("daemon-reload");
-            Systemctl("enable", UnitName);
+            // Autostart on by default; later the user's choice (settings) is kept
+            if (firstInstall) Systemctl("enable", UnitName);
             // Restart picks up a changed AppImage path; start if it wasn't running
             Systemctl("restart", UnitName);
         }
         else
         {
-            Systemctl("enable", UnitName);
+            // The tray needs the service, also when it doesn't start at login
             Systemctl("start", UnitName);
         }
+    }
+
+    public static bool IsServiceAutostartEnabled() => Systemctl("is-enabled", "--quiet", UnitName) == 0;
+
+    public static void SetServiceAutostart(bool enabled) => Systemctl(enabled ? "enable" : "disable", UnitName);
+
+    public static bool IsTrayAutostartEnabled()
+    {
+        if (!File.Exists(AutostartFile)) return false;
+        return !File.ReadAllLines(AutostartFile).Any(l => l.Trim().Equals("Hidden=true", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static void SetTrayAutostart(bool enabled)
+    {
+        if (AppImagePath is not { } appImage) return;
+        WriteIfChanged(AutostartFile, DesktopEntry(Quote(appImage), autostart: true, hidden: !enabled));
     }
 
     public static void Uninstall()
@@ -84,7 +104,8 @@ internal static class LinuxIntegration
 
     public static int Systemctl(params string[] args) => SystemIntegration.Run("systemctl", ["--user", .. args]);
 
-    private static byte[] DesktopEntry(string exec, bool autostart)
+    /// <param name="hidden">Autostart entry only: Hidden=true disables it (XDG autostart spec).</param>
+    private static byte[] DesktopEntry(string exec, bool autostart, bool hidden)
     {
         var text = $"""
             [Desktop Entry]
@@ -95,7 +116,7 @@ internal static class LinuxIntegration
             Icon={IconName}
             Terminal=false
             Categories=Utility;
-            {(autostart ? "X-GNOME-Autostart-enabled=true\n" : "")}
+            {(autostart ? $"X-GNOME-Autostart-enabled={(hidden ? "false" : "true")}\nHidden={(hidden ? "true" : "false")}\n" : "")}
             """;
         return System.Text.Encoding.UTF8.GetBytes(text);
     }
