@@ -1,0 +1,69 @@
+{
+    // Debugging in VSCodium uses netcoredbg from the "muhammad-sammy.csharp" extension (Open VSX).
+    // The base station addresses for the service come from user secrets in Development, see README.
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Service",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/LighthouseManagerService/bin/Debug/net10.0/LighthouseManagerService.dll",
+            "cwd": "${workspaceFolder}/LighthouseManagerService",
+            "env": { "DOTNET_ENVIRONMENT": "Development" },
+            "console": "internalConsole"
+        },
+        {
+            "name": "Tray",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/LighthouseManager.Tray/bin/Debug/net10.0/LighthouseManager.Tray.dll",
+            "args": ["--open"],
+            "cwd": "${workspaceFolder}/LighthouseManager.Tray",
+            "console": "internalConsole"
+        },
+        {
+            // Talks to the base stations directly: don't run it while the service runs
+            "name": "CLI (discover)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/LighthouseManager/bin/Debug/net10.0/LighthouseManager.dll",
+            "args": ["-d"],
+            "cwd": "${workspaceFolder}/LighthouseManager",
+            // Ctrl+C to stop discovery needs a real terminal
+            "console": "integratedTerminal"
+        },
+        // Compound members without preLaunchTask, so the build runs once (on the compound)
+        {
+            "name": "Service (compound)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/LighthouseManagerService/bin/Debug/net10.0/LighthouseManagerService.dll",
+            "cwd": "${workspaceFolder}/LighthouseManagerService",
+            "env": { "DOTNET_ENVIRONMENT": "Development" },
+            "console": "internalConsole",
+            "presentation": { "hidden": true }
+        },
+        {
+            "name": "Tray (compound)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/LighthouseManager.Tray/bin/Debug/net10.0/LighthouseManager.Tray.dll",
+            "args": ["--open"],
+            "cwd": "${workspaceFolder}/LighthouseManager.Tray",
+            "console": "internalConsole",
+            "presentation": { "hidden": true }
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Service + Tray",
+            "preLaunchTask": "build",
+            "configurations": ["Service (compound)", "Tray (compound)"],
+            "stopAll": true,
+            "presentation": { "order": 1 }
+        }
+    ]
+}

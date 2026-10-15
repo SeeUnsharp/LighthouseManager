@@ -8,23 +8,44 @@ on:
 
 jobs:
   build:
-
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - rid: win-x64
+            tfm: net10.0-windows10.0.19041.0
+            artifact: LighthouseManager-win-x64
+          - rid: linux-x64
+            tfm: net10.0
+            artifact: LighthouseManager-linux-x64
 
     steps:
-    - uses: actions/checkout@v2      
-    - name: Setup .NET Core SDK
-      uses: actions/setup-dotnet@v1.7.2
-    - name: Restore dependencies
-      run: dotnet restore
-    - name: Build
-      run: dotnet publish --configuration Release --output ./Release -r win-x64 -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true -p:PublishTrimmed=True -p:DebugType=None --self-contained      
-    - name: Upload a Build Artifact
-      uses: actions/upload-artifact@v2.2.2
+    - uses: actions/checkout@v4
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
       with:
-        name: LighthouseManager-win10-64
-        path: |
-          Release/LighthouseManager.exe
-          Release/LighthouseManagerService.exe
-          Release/appsettings.json
- 
+        dotnet-version: 10.0.x
+    - name: Test
+      # Platform independent logic, runs once
+      if: matrix.rid == 'linux-x64'
+      run: dotnet test tests/LighthouseManager.Tests --configuration Release
+    - name: Publish
+      run: |
+        for project in LighthouseManager LighthouseManagerService; do
+          dotnet publish $project --configuration Release -f ${{ matrix.tfm }} -r ${{ matrix.rid }} --output ./Release \
+            -p:PublishSingleFile=true -p:PublishTrimmed=true -p:DebugType=None --self-contained
+        done
+        # The tray app is a pure API client without Bluetooth, so it has a single TFM for both platforms
+        dotnet publish LighthouseManager.Tray --configuration Release -f net10.0 -r ${{ matrix.rid }} --output ./Release \
+          -p:PublishSingleFile=true -p:PublishTrimmed=true -p:IncludeNativeLibrariesForSelfExtract=true \
+          -p:DebugType=None --self-contained
+    - name: Add license files
+      run: cp LICENSE THIRD-PARTY-NOTICES.md ./Release/
+    - name: Add systemd unit and autostart entry
+      if: matrix.rid == 'linux-x64'
+      run: cp LighthouseManagerService/linux/lighthousemanager.service LighthouseManager.Tray/linux/lighthousemanager-tray.desktop ./Release/
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact }}
+        path: Release/

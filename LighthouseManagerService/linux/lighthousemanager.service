@@ -1,0 +1,13 @@
+# systemd user unit: copy to ~/.config/systemd/user/ and adjust ExecStart, then
+#   systemctl --user daemon-reload && systemctl --user enable --now lighthousemanager
+[Unit]
+Description=LighthouseManager - wakes/sleeps Lighthouse base stations with VR runtimes
+After=bluetooth.target
+
+[Service]
+Type=notify
+ExecStart=%h/LighthouseManager/LighthouseManagerService
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
