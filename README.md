@@ -9,6 +9,12 @@ The solution consists of:
 - **LighthouseManager.Tray**: tray icon with a flyout to see and control the base stations (a client of the API, so you can build your own UI as well)
 - **LighthouseManager**: standalone command-line tool
 
+## Version 2.0
+
+Version 2.0 is a complete overhaul of LighthouseManager. The original Windows-only command-line tool was rebuilt on .NET 10 with Linux support, a background service with a local API, a tray app and installers. It's meant as a new base for further features, such as a [Home Assistant integration](https://github.com/SeeUnsharp/LighthouseManager/issues/15).
+
+Download the latest version from [Releases](https://github.com/SeeUnsharp/LighthouseManager/releases/latest).
+
 > **Note:** LighthouseManager is a hobby project I work on in my free time. Most of the code for version 2.0 (the .NET 10 migration, Linux support, service API, tray app and installers) was generated with AI ([Claude Code](https://claude.com/claude-code)). I reviewed it and tested it with real base stations on Windows and Linux, but please keep that in mind and report anything that looks off in the [issues](../../issues).
 
 ## Requirements
