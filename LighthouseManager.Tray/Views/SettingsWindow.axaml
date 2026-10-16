@@ -195,7 +195,6 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ================= General ================= -->
             <!-- ================= Home Assistant ================= -->
             <TabItem Header="Home Assistant">
                 <ScrollViewer>
@@ -255,6 +254,7 @@
                 </ScrollViewer>
             </TabItem>
 
+            <!-- ================= General ================= -->
             <TabItem Header="General">
                 <ScrollViewer>
                     <StackPanel Spacing="10" Margin="0,8,8,0">
@@ -303,6 +303,7 @@
                         </Grid>
 
                         <Separator />
+                        <TextBlock Classes="heading" Text="Updates" />
                         <Grid ColumnDefinitions="*,Auto">
                             <TextBlock VerticalAlignment="Center">
                                 <Run Text="LighthouseManager " />
@@ -312,6 +313,12 @@
                                     Command="{Binding Main.InstallUpdateCommand}"
                                     IsVisible="{Binding Main.IsUpdateAvailable}" />
                         </Grid>
+                        <CheckBox Content="Get beta versions" IsChecked="{Binding Main.BetaUpdates}"
+                                  IsEnabled="{Binding Main.CanUpdate}" />
+                        <TextBlock Classes="secondary" TextWrapping="Wrap" IsVisible="{Binding Main.CanUpdate}"
+                                   Text="Beta versions get new features first and may still have bugs. Turning this off keeps an installed beta until a newer regular version is released." />
+                        <TextBlock Classes="secondary" TextWrapping="Wrap" IsVisible="{Binding !Main.CanUpdate}"
+                                   Text="Updates are only available when installed with the installer (Windows) or as AppImage (Linux)." />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

@@ -30,7 +30,7 @@ public class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             _api = new ApiClient(Program.ApiUrl);
-            _viewModel = new MainViewModel(_api, new Updates());
+            _viewModel = new MainViewModel(_api, new Updates(TraySettings.Load().BetaUpdates));
             _flyout = new FlyoutWindow { DataContext = _viewModel };
 
             _trayIcon = new TrayIcon { Menu = CreateMenu(desktop) };

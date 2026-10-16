@@ -7,34 +7,41 @@ namespace LighthouseManager.Tray;
 ///     Checks GitHub Releases for new versions. Only for installed builds; nothing is installed without the user
 ///     clicking "Update".
 /// </summary>
+/// <remarks>
+///     With <see cref="IncludeBeta" />, GitHub pre-releases (tags like <c>v2.1.0-beta.1</c>) count too; the highest
+///     version wins, so a beta is replaced by its final release. Never downgrades: turning beta off keeps the installed
+///     beta until a newer stable release exists.
+/// </remarks>
 public sealed class Updates
 {
     private const string RepositoryUrl = "https://github.com/SeeUnsharp/LighthouseManager";
 
-    private readonly UpdateManager? _manager;
+    private UpdateManager? _manager;
+    private bool _includeBeta;
 
-    public Updates()
+    public Updates(bool includeBeta)
     {
-        try
-        {
-            var manager = new UpdateManager(new GithubSource(RepositoryUrl, null, false));
-            // Zip downloads and development builds have nothing to update
-            if (manager.IsInstalled) _manager = manager;
-        }
-        catch (Exception)
-        {
-            // Not installed through Velopack
-        }
+        IncludeBeta = includeBeta;
     }
 
     public bool IsAvailable => _manager != null;
 
+    public bool IncludeBeta
+    {
+        get => _includeBeta;
+        set
+        {
+            _includeBeta = value;
+            _manager = Create(value);
+        }
+    }
+
     public async Task<UpdateInfo?> CheckAsync()
     {
-        if (_manager == null) return null;
+        if (_manager is not { } manager) return null;
         try
         {
-            return await _manager.CheckForUpdatesAsync();
+            return await manager.CheckForUpdatesAsync();
         }
         catch (Exception)
         {
@@ -49,8 +56,23 @@ public sealed class Updates
     /// </summary>
     public async Task ApplyAsync(UpdateInfo update)
     {
-        if (_manager == null) return;
-        await _manager.DownloadUpdatesAsync(update);
-        _manager.ApplyUpdatesAndRestart(update);
+        if (_manager is not { } manager) return;
+        await manager.DownloadUpdatesAsync(update);
+        manager.ApplyUpdatesAndRestart(update);
+    }
+
+    private static UpdateManager? Create(bool includeBeta)
+    {
+        try
+        {
+            var manager = new UpdateManager(new GithubSource(RepositoryUrl, null, includeBeta));
+            // Zip downloads and development builds have nothing to update
+            return manager.IsInstalled ? manager : null;
+        }
+        catch (Exception)
+        {
+            // Not installed through Velopack
+            return null;
+        }
     }
 }

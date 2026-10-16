@@ -30,6 +30,8 @@ Then add your base stations: on first start the tray searches for base stations 
 
 When a new version is available, the tray shows a small notice with *Update now*, *Later* and *What's new*, a refresh badge on the tray icon and an *Update to …* entry in its menu. *Later* hides the notice until the next version; the badge, the menu entry and the button in the flyout stay. Updating installs the new version and restarts the app.
 
+To try new features early, tick *Get beta versions* in *Settings → General*. Beta versions are GitHub pre-releases and may still have bugs; you get the regular release once it's out. Turning it off again keeps the installed beta until a newer regular version is released.
+
 Without installing, the zip downloads from the CI builds work as well; see [Manual setup](#manual-setup).
 
 # LighthouseManager (command-line tool)
@@ -115,7 +117,7 @@ Tray icon for Windows and Linux. The icon shows the overall state (green: on, ye
 *Settings* (gear button in the flyout, or *Settings…* in the tray menu) has three pages:
 - **Base stations:** the configured base stations with *Remove*, and *Find base stations* to add more
 - **Trigger applications:** the applications that wake the base stations; add VR runtimes with one click (SteamVR, Monado, WiVRn), by process name, or by choosing from the running applications
-- **General:** automatic mode, start the service / the tray icon at login (installed builds), settings file and log folder, version and updates
+- **General:** automatic mode, start the service / the tray icon at login (installed builds), settings file and log folder, version and updates (optionally beta versions)
 
 `LighthouseManager.Tray --settings [stations|triggers|general]` opens the settings directly.
 
@@ -138,7 +140,7 @@ LighthouseManager can be controlled from [Home Assistant](https://www.home-assis
 The connection goes from LighthouseManager to the broker, so nothing on your computer is opened to the network. The password is stored unencrypted in `mqtt.json` next to your settings file, readable by your user only; *Remove* next to the password field deletes it. For the topics, see [docs/API.md](docs/API.md#home-assistant-mqtt).
 
 # Building packages
-`build/pack.sh <linux-x64|win-x64> <version>` builds the AppImage or the Windows installer with [Velopack](https://velopack.io) (both on Linux; needs the .NET 10 SDK, `vpk` and, for the AppImage, `mksquashfs`). Pushing a tag like `v2.1.0` builds both and publishes a GitHub release (`.github/workflows/release.yml`).
+`build/pack.sh <linux-x64|win-x64> <version>` builds the AppImage or the Windows installer with [Velopack](https://velopack.io) (both on Linux; needs the .NET 10 SDK, `vpk` and, for the AppImage, `mksquashfs`). Pushing a tag like `v2.1.0` builds both and publishes a GitHub release (`.github/workflows/release.yml`); a tag with a suffix like `v2.1.0-beta.1` publishes a pre-release, offered only to users who turned on beta versions.
 
 # License
 LighthouseManager is licensed under the [MIT License](LICENSE). The release builds include third-party components under their own licenses, see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
