@@ -61,6 +61,8 @@ internal static class LinuxIntegration
 
             """;
         var firstInstall = !File.Exists(UnitFile);
+        // E.g. after the old AppImage was deleted: systemd refuses to start a unit that hit its restart limit
+        Systemctl("reset-failed", UnitName);
         if (WriteIfChanged(UnitFile, System.Text.Encoding.UTF8.GetBytes(unit)))
         {
             Systemctl("daemon-reload");

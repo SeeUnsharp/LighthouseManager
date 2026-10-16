@@ -26,9 +26,21 @@ public sealed class UserSettingsTests : IDisposable
         Directory.Delete(_root, true);
     }
 
-    private static string File => AppPaths.UserSettingsFile;
+    /// <summary>
+    ///     The settings file under test. Fails instead of returning a path outside the temporary directory: a race on
+    ///     XDG_CONFIG_HOME once made a test overwrite the real user settings.
+    /// </summary>
+    private string File
+    {
+        get
+        {
+            var file = AppPaths.UserSettingsFile;
+            Assert.StartsWith(_root, file);
+            return file;
+        }
+    }
 
-    private static IReadOnlyList<ulong> ReadBack()
+    private IReadOnlyList<ulong> ReadBack()
     {
         var settings = new ConfigurationBuilder()
             .AddJsonFile(File, optional: false)
@@ -42,6 +54,7 @@ public sealed class UserSettingsTests : IDisposable
     {
         if (!OperatingSystem.IsLinux()) return;
 
+        _ = File;
         UserSettings.AddTo(new ConfigurationManager());
 
         // An empty value would override addresses in the appsettings.json next to the program
@@ -53,6 +66,7 @@ public sealed class UserSettingsTests : IDisposable
     public void Saving_into_the_template_keeps_its_comments()
     {
         if (!OperatingSystem.IsLinux()) return;
+        _ = File;
         UserSettings.AddTo(new ConfigurationManager());
         var comments = System.IO.File.ReadAllLines(File).Count(l => l.TrimStart().StartsWith("//"));
 

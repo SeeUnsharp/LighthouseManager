@@ -32,10 +32,14 @@ public sealed class LinuxAutostartTests : IDisposable
 
     private string AutostartFile => Path.Combine(_root, "autostart", "lighthousemanager-tray.desktop");
 
+    // Fail instead of touching the real autostart entry if XDG_CONFIG_HOME isn't ours (see UserSettingsTests)
+    private void AssertIsolated() => Assert.Equal(_root, Environment.GetEnvironmentVariable("XDG_CONFIG_HOME"));
+
     [Fact]
     public void Disabling_keeps_the_entry_but_hides_it()
     {
         if (!OperatingSystem.IsLinux()) return;
+        AssertIsolated();
 
         LinuxIntegration.SetTrayAutostart(true);
         Assert.True(LinuxIntegration.IsTrayAutostartEnabled());
