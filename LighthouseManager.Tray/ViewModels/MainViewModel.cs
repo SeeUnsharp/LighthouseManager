@@ -93,6 +93,35 @@ public sealed partial class MainViewModel : ObservableObject
 
     public bool IsUpdateAvailable => Update != null;
 
+    /// <summary>
+    ///     Installed builds look for updates (Setup.exe / AppImage, not zip downloads or development builds).
+    /// </summary>
+    public bool CanUpdate => _updates.IsAvailable;
+
+    /// <summary>
+    ///     Also offer beta versions (GitHub pre-releases); stored in <see cref="TraySettings" />, checks right away.
+    /// </summary>
+    public bool BetaUpdates
+    {
+        get => _updates.IncludeBeta;
+        set
+        {
+            if (_updates.IncludeBeta == value) return;
+            _updates.IncludeBeta = value;
+            OnPropertyChanged();
+            try
+            {
+                (TraySettings.Load() with { BetaUpdates = value }).Save();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                LastError = $"Can't save the update setting: {ex.Message}";
+            }
+
+            _ = CheckForUpdatesAsync();
+        }
+    }
+
     public string UpdateText => Update == null ? "" : $"Update to {Update.TargetFullRelease.Version}";
 
     public string? UpdateVersion => Update?.TargetFullRelease.Version.ToString();
@@ -252,14 +281,24 @@ public sealed partial class MainViewModel : ObservableObject
             await Task.Delay(TimeSpan.FromSeconds(30), ct);
             while (!ct.IsCancellationRequested)
             {
-                var update = await _updates.CheckAsync();
-                Dispatcher.UIThread.Post(() => Update = update);
+                await CheckForUpdatesAsync();
                 await Task.Delay(TimeSpan.FromHours(6), ct);
             }
         }
         catch (OperationCanceledException)
         {
         }
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        var includeBeta = _updates.IncludeBeta;
+        var update = await _updates.CheckAsync();
+        Dispatcher.UIThread.Post(() =>
+        {
+            // A check started before the beta setting changed has an outdated answer
+            if (_updates.IncludeBeta == includeBeta) Update = update;
+        });
     }
 
     [RelayCommand]
