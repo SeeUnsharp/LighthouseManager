@@ -10,7 +10,8 @@ namespace LighthouseManagerService;
 /// </summary>
 public sealed class StationController
 {
-    private const string StuckMessage = "Doesn't finish starting up. Check its power and LED.";
+    // Observed fix for a station stuck at raw 0x01: power cycle it
+    private const string StuckMessage = "Doesn't finish starting up. Unplug it for a few seconds, then turn it on again.";
 
     private readonly SemaphoreSlim _bluetoothLock = new(1, 1);
     private readonly BootWatch _bootWatch = new();

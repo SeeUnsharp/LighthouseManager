@@ -66,7 +66,7 @@ public class Worker(ILogger<Worker> logger, IOptions<AppSettings> settings, Stat
                 if (next is { } state)
                 {
                     if (_policy.Attempts > 1)
-                        logger.LogWarning("Retrying '{State}' for base stations (attempt {Attempt}/{Max})", state,
+                        logger.LogWarning("Retrying '{State}' for base stations (attempt {Attempt}/{Max})", state.ToString(),
                             _policy.Attempts, _policy.MaxAttempts);
                     else if (state == Powerstate.Wake)
                         logger.LogInformation("'{Process}' detected, waking base stations", runningTrigger);
