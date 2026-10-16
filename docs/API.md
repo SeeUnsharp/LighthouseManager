@@ -40,14 +40,15 @@ The API is only meant for clients on the same machine:
 | `address` | MAC address, also the station's id in URLs |
 | `name` | Bluetooth name, `null` until the station was read once |
 | `state` | `unknown`, `sleeping`, `standby`, `booting` (spinning up after a wake), `awake` |
-| `rawState` | Raw byte of the power state characteristic, for clients that want to interpret it themselves |
+| `rawState` | Raw byte of the power state characteristic, for clients that want to interpret it themselves; `null` after a command until the next read. Seen: `0x00` sleeping, `0x02` standby, `0x01`/`0x08` booting, `0x09`/`0x0B` awake |
 | `busy` | A Bluetooth operation for this station is running |
 | `error` | Last error (e.g. `"Not reachable"`), `null` after the next success |
 | `updatedAt` | When `state` was last confirmed (read or successfully set) |
 
 `state` is cached. It's read at service start, every `AppSettings:StateRefreshInterval` seconds (default 300, 0 = off),
-after commands, and on `refresh`. A station woken by a command reports `booting` until the follow-up read about 10
-seconds later.
+after commands, and on `refresh`. A station woken by a command reports `booting` until a read shows it awake: after a wake it's read
+again after about 10 seconds and then every 15 seconds while it reports `booting`. A station that is still `booting`
+after 2 minutes gets `error` "Doesn't finish starting up…" (observed: raw `0x01` for hours).
 
 ### Status
 
