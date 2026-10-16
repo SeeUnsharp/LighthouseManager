@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Http.Features;
 using System.Text.Json.Serialization;
 using LighthouseManager.Core;
+using LighthouseManagerService.Mqtt;
 
 namespace LighthouseManagerService;
 
@@ -28,6 +29,32 @@ public static class Api
         });
 
         api.MapGet("/stations", (StationController c) => c.GetSnapshot().Stations);
+
+        api.MapGet("/mqtt", (MqttBridge mqtt) => ToMqttConfig(mqtt));
+
+        api.MapPut("/mqtt", (MqttConfigRequest request, MqttBridge mqtt) =>
+        {
+            var current = mqtt.Settings;
+            var settings = current with
+            {
+                Enabled = request.Enabled,
+                Host = request.Host.Trim(),
+                Port = request.Port,
+                Username = request.Username.Trim(),
+                // null keeps the stored password; the API never returns it
+                Password = request.Password ?? current.Password,
+                UseTls = request.UseTls,
+                DiscoveryPrefix = request.DiscoveryPrefix?.Trim() ?? current.DiscoveryPrefix,
+                BaseTopic = request.BaseTopic?.Trim() ?? current.BaseTopic,
+                NodeId = request.NodeId?.Trim() ?? current.NodeId
+            };
+            if (settings.Validate() is { } error)
+                return TypedResults.Json(new ApiError(error), ApiJsonContext.Default.ApiError,
+                    statusCode: StatusCodes.Status400BadRequest);
+
+            mqtt.Apply(settings);
+            return Results.Ok(ToMqttConfig(mqtt));
+        });
 
         api.MapGet("/triggers", (StationController c) => new TriggerList(c.TriggerProcesses.ToArray()));
 
@@ -107,6 +134,14 @@ public static class Api
         });
     }
 
+    private static MqttConfig ToMqttConfig(MqttBridge mqtt)
+    {
+        var s = mqtt.Settings;
+        var status = mqtt.Status;
+        return new MqttConfig(s.Enabled, s.Host, s.Port, s.Username, s.Password.Length > 0, s.UseTls,
+            s.DiscoveryPrefix, s.BaseTopic, s.NodeId, MqttSettings.DefaultNodeId, status.Connected, status.Error);
+    }
+
     private static string[] RunningProcessNames()
     {
         var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -170,6 +205,37 @@ public sealed record AddStationsRequest(string[] Addresses);
 
 public sealed record TriggerList(string[] Processes);
 
+public sealed record ApiError(string Error);
+
+/// <param name="HasPassword">Whether a password is stored; the password itself is never returned.</param>
+/// <param name="DefaultNodeId">Node ID used when <paramref name="NodeId" /> is empty (from the computer name).</param>
+public sealed record MqttConfig(
+    bool Enabled,
+    string Host,
+    int Port,
+    string Username,
+    bool HasPassword,
+    bool UseTls,
+    string DiscoveryPrefix,
+    string BaseTopic,
+    string NodeId,
+    string DefaultNodeId,
+    bool Connected,
+    string? Error);
+
+/// <param name="Password">New password; null keeps the stored one, "" removes it.</param>
+/// <param name="DiscoveryPrefix">null keeps the current value (also for BaseTopic and NodeId).</param>
+public sealed record MqttConfigRequest(
+    bool Enabled,
+    string Host,
+    int Port,
+    string Username,
+    string? Password,
+    bool UseTls,
+    string? DiscoveryPrefix = null,
+    string? BaseTopic = null,
+    string? NodeId = null);
+
 /// <param name="Configured">Already in the configuration.</param>
 public sealed record DiscoveredStationInfo(string Address, string Name, bool Configured);
 
@@ -191,5 +257,8 @@ public sealed class CamelCaseEnumConverter<TEnum>() : JsonStringEnumConverter<TE
 [JsonSerializable(typeof(AutomaticModeRequest))]
 [JsonSerializable(typeof(AddStationsRequest))]
 [JsonSerializable(typeof(TriggerList))]
+[JsonSerializable(typeof(ApiError))]
+[JsonSerializable(typeof(MqttConfig))]
+[JsonSerializable(typeof(MqttConfigRequest))]
 [JsonSerializable(typeof(DiscoveryResult))]
 internal partial class ApiJsonContext : JsonSerializerContext;

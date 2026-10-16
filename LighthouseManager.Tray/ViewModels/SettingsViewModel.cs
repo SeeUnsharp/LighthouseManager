@@ -33,6 +33,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public SettingsViewModel(MainViewModel main)
     {
         Main = main;
+        HomeAssistant = new HomeAssistantViewModel(main.Api);
         main.PropertyChanged += OnMainChanged;
         UpdateTriggers();
         LoadAutostart();
@@ -173,7 +174,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>
     ///     Re-reads what may have changed outside the window (autostart).
     /// </summary>
-    public void Reload() => LoadAutostart();
+    public void Reload()
+    {
+        LoadAutostart();
+        _ = HomeAssistant.LoadAsync();
+    }
+
+    public HomeAssistantViewModel HomeAssistant { get; }
 
     private void LoadAutostart()
     {

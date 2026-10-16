@@ -128,6 +128,15 @@ The installer / AppImage sets this up already.
 - **Windows:** press Win+R, enter `shell:startup` and put a shortcut to `LighthouseManager.Tray.exe` into the folder.
 - **Linux:** copy `lighthousemanager-tray.desktop` to `~/.config/autostart/` (adjust `Exec` if the files aren't in `~/LighthouseManager`). KDE Plasma shows tray icons out of the box. GNOME needs the "AppIndicator and KStatusNotifierItem Support" extension.
 
+# Home Assistant
+LighthouseManager can be controlled from [Home Assistant](https://www.home-assistant.io/) through MQTT: turn base stations on and off, see their state, switch automatic mode, and use all of it in automations (e.g. turn the base stations on when you enter the room).
+
+1. In Home Assistant, set up an MQTT broker and the MQTT integration, e.g. the **Mosquitto broker** add-on (*Settings → Add-ons*) and *Settings → Devices & services → MQTT*. Create a separate user for LighthouseManager (*Settings → People → Users*); don't use your own login, because the password is stored unencrypted (see below).
+2. In the tray app, open *Settings → Home Assistant*, tick *Connect to Home Assistant (MQTT)*, enter the broker address (e.g. `homeassistant.local`), port (`1883`, or `8883` with TLS), username and password, and click *Save*. The status shows *Connected*.
+3. In Home Assistant, a device *LighthouseManager (your computer)* appears, plus one device per base station.
+
+The connection goes from LighthouseManager to the broker, so nothing on your computer is opened to the network. The password is stored unencrypted in `mqtt.json` next to your settings file, readable by your user only. For the topics, see [docs/API.md](docs/API.md#home-assistant-mqtt).
+
 # Building packages
 `build/pack.sh <linux-x64|win-x64> <version>` builds the AppImage or the Windows installer with [Velopack](https://velopack.io) (both on Linux; needs the .NET 10 SDK, `vpk` and, for the AppImage, `mksquashfs`). Pushing a tag like `v2.1.0` builds both and publishes a GitHub release (`.github/workflows/release.yml`).
 

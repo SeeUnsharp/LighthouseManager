@@ -60,6 +60,25 @@ public sealed class ApiClient(Uri baseAddress) : IDisposable
         return list?.Processes ?? [];
     }
 
+    public async Task<MqttConfig> GetMqttAsync()
+    {
+        return (await _http.GetFromJsonAsync("api/mqtt", ApiJsonContext.Default.MqttConfig))!;
+    }
+
+    /// <exception cref="InvalidOperationException">The service rejected the settings (message for the user).</exception>
+    public async Task<MqttConfig> SetMqttAsync(MqttConfigRequest request)
+    {
+        using var response = await _http.PutAsJsonAsync("api/mqtt", request, ApiJsonContext.Default.MqttConfigRequest);
+        if ((int)response.StatusCode == 400)
+        {
+            var error = await response.Content.ReadFromJsonAsync(ApiJsonContext.Default.ApiError);
+            throw new InvalidOperationException(error?.Error ?? "Invalid settings");
+        }
+
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync(ApiJsonContext.Default.MqttConfig))!;
+    }
+
     public async Task<StatusSnapshot> RemoveStationAsync(string address)
     {
         using var response = await _http.DeleteAsync($"api/stations/{Uri.EscapeDataString(address)}");

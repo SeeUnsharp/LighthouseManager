@@ -17,12 +17,12 @@ public partial class SettingsWindow : Window
         };
     }
 
-    /// <param name="tab">"stations", "triggers" or "general"; null keeps the current tab.</param>
+    /// <param name="tab">"stations", "triggers", "homeassistant" or "general"; null keeps the current tab.</param>
     public void ShowSettings(string? tab = null)
     {
         (DataContext as SettingsViewModel)?.Reload();
         if (this.FindControl<TabControl>("Tabs") is { } tabs && tab != null)
-            tabs.SelectedIndex = tab switch { "triggers" => 1, "general" => 2, _ => 0 };
+            tabs.SelectedIndex = tab switch { "triggers" => 1, "homeassistant" => 2, "general" => 3, _ => 0 };
         Show();
         Activate();
     }
