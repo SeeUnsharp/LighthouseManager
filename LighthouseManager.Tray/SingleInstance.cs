@@ -80,7 +80,16 @@ public sealed class SingleInstance : IDisposable
                 }
                 catch (IOException)
                 {
-                    // Client went away; keep listening
+                    // Client went away, or the pipe name is taken (e.g. a second tray with another state
+                    // directory): keep listening, but don't spin
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(1), _cts.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
                 }
             }
         });

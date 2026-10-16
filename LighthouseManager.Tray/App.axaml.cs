@@ -15,6 +15,8 @@ public class App : Application
     private ApiClient? _api;
     private FlyoutWindow? _flyout;
     private SettingsWindow? _settings;
+    private UpdateWindow? _updateNotice;
+    private string? _noticeShownFor;
     private TrayIcon? _trayIcon;
     private MainViewModel? _viewModel;
 
@@ -36,6 +38,18 @@ public class App : Application
             TrayIcon.SetIcons(this, [_trayIcon]);
 
             _viewModel.Changed += (_, _) => UpdateTrayIcon();
+            // The update check runs separately from the status events
+            _viewModel.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName is nameof(MainViewModel.Update) or nameof(MainViewModel.IsUpdating))
+                {
+                    UpdateMenu();
+                    UpdateTrayIcon();
+                }
+
+                if (e.PropertyName == nameof(MainViewModel.Update)) ShowUpdateNotice();
+            };
+            _viewModel.UpdateDismissed += (_, _) => _updateNotice?.Hide();
             _viewModel.SettingsRequested += (_, _) => ShowSettings();
             UpdateTrayIcon();
 
@@ -53,11 +67,17 @@ public class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
+    private NativeMenuItem? _updateItem;
+    private NativeMenuItemSeparator? _updateSeparator;
+
     private NativeMenu CreateMenu(IClassicDesktopStyleApplicationLifetime desktop)
     {
+        // Shown only while an update is available (see UpdateMenu)
+        _updateItem = new NativeMenuItem("Update") { Command = _viewModel!.InstallUpdateCommand, IsVisible = false };
+        _updateSeparator = new NativeMenuItemSeparator { IsVisible = false };
         var open = new NativeMenuItem("Open");
         open.Click += (_, _) => _flyout!.ShowFlyout();
-        var wake = new NativeMenuItem("Turn all on") { Command = _viewModel!.WakeAllCommand };
+        var wake = new NativeMenuItem("Turn all on") { Command = _viewModel.WakeAllCommand };
         var sleep = new NativeMenuItem("Sleep all") { Command = _viewModel.SleepAllCommand };
         var settingsWindow = new NativeMenuItem("Settings…");
         settingsWindow.Click += (_, _) => ShowSettings();
@@ -90,7 +110,7 @@ public class App : Application
 
         return
         [
-            open, settingsWindow, new NativeMenuItemSeparator(), wake, sleep, new NativeMenuItemSeparator(), find,
+            _updateItem, _updateSeparator, open, settingsWindow, new NativeMenuItemSeparator(), wake, sleep, new NativeMenuItemSeparator(), find,
             settings, restart,
             remove, new NativeMenuItemSeparator(), quit
         ];
@@ -112,12 +132,43 @@ public class App : Application
         else if (DateTime.UtcNow - _flyout.LastHidden > TimeSpan.FromMilliseconds(300)) _flyout.ShowFlyout();
     }
 
+    /// <summary>
+    ///     Pops up the update notice once per new version, unless the user chose "Later" for it.
+    /// </summary>
+    private void ShowUpdateNotice()
+    {
+        var version = _viewModel?.UpdateVersion;
+        if (version == null)
+        {
+            _updateNotice?.Hide();
+            return;
+        }
+
+        if (version == _noticeShownFor || _viewModel!.IsUpdateDismissed) return;
+        _noticeShownFor = version;
+        // The open flyout already shows the update button
+        if (_flyout?.IsVisible == true) return;
+
+        _updateNotice ??= new UpdateWindow { DataContext = _viewModel };
+        _updateNotice.ShowNotice();
+    }
+
+    private void UpdateMenu()
+    {
+        if (_updateItem == null || _updateSeparator == null || _viewModel == null) return;
+
+        _updateItem.Header = _viewModel.IsUpdating ? "Updating…" : $"{_viewModel.UpdateText}…";
+        _updateItem.IsEnabled = !_viewModel.IsUpdating;
+        _updateItem.IsVisible = _updateSeparator.IsVisible = _viewModel.IsUpdateAvailable;
+    }
+
     private void UpdateTrayIcon()
     {
         if (_trayIcon == null || _viewModel == null) return;
 
-        _trayIcon.Icon = TrayIconRenderer.Get(_viewModel.Overall);
+        _trayIcon.Icon = TrayIconRenderer.Get(_viewModel.Overall, _viewModel.IsUpdateAvailable);
         _trayIcon.ToolTipText = TrayToolTip.Build(_viewModel.StatusText,
-            _viewModel.Stations.Select(st => (st.DisplayName, st.StateText)).ToList());
+            _viewModel.Stations.Select(st => (st.DisplayName, st.StateText)).ToList(),
+            _viewModel.Update?.TargetFullRelease.Version.ToString());
     }
 }

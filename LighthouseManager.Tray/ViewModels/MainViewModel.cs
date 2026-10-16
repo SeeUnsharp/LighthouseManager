@@ -48,7 +48,7 @@ public sealed partial class MainViewModel : ObservableObject
     private string? _serviceVersion;
 
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(UpdateText))]
-    [NotifyPropertyChangedFor(nameof(IsUpdateAvailable))]
+    [NotifyPropertyChangedFor(nameof(IsUpdateAvailable), nameof(UpdateVersion), nameof(UpdateMessage))]
     private UpdateInfo? _update;
 
     [ObservableProperty] private bool _isUpdating;
@@ -94,6 +94,68 @@ public sealed partial class MainViewModel : ObservableObject
     public bool IsUpdateAvailable => Update != null;
 
     public string UpdateText => Update == null ? "" : $"Update to {Update.TargetFullRelease.Version}";
+
+    public string? UpdateVersion => Update?.TargetFullRelease.Version.ToString();
+
+    public string UpdateMessage => $"LighthouseManager {UpdateVersion} is available. Updating takes a few seconds; " +
+                                   "the app restarts afterwards.";
+
+    // Remembers "Later" per version, so the update notice isn't shown again until there's a newer one
+    private static string DismissedUpdateFile => Path.Combine(SingleInstance.StateDirectory, "update-dismissed");
+
+    /// <summary>
+    ///     Whether the user clicked "Later" for the currently available version.
+    /// </summary>
+    public bool IsUpdateDismissed
+    {
+        get
+        {
+            try
+            {
+                return UpdateVersion != null && File.Exists(DismissedUpdateFile) &&
+                       File.ReadAllText(DismissedUpdateFile).Trim() == UpdateVersion;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Raised by "Later" in the update notice.
+    /// </summary>
+    public event EventHandler? UpdateDismissed;
+
+    [RelayCommand]
+    private void DismissUpdate()
+    {
+        try
+        {
+            Directory.CreateDirectory(SingleInstance.StateDirectory);
+            File.WriteAllText(DismissedUpdateFile, UpdateVersion ?? "");
+        }
+        catch (IOException)
+        {
+            // Then the notice just shows up again next time
+        }
+
+        UpdateDismissed?.Invoke(this, EventArgs.Empty);
+    }
+
+    [RelayCommand]
+    private void OpenReleaseNotes()
+    {
+        if (UpdateVersion == null) return;
+        try
+        {
+            SystemIntegration.OpenFile($"https://github.com/SeeUnsharp/LighthouseManager/releases/tag/v{UpdateVersion}");
+        }
+        catch (Exception ex)
+        {
+            LastError = $"Can't open the release notes: {ex.Message}";
+        }
+    }
 
     public string VersionText => ServiceVersion == null ? "" : $"v{ServiceVersion}";
 

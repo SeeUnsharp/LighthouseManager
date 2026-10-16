@@ -1,0 +1,42 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LighthouseManager.Tray.ViewModels"
+        x:Class="LighthouseManager.Tray.Views.UpdateWindow"
+        x:DataType="vm:MainViewModel"
+        Title="LighthouseManager update"
+        Width="340" SizeToContent="Height"
+        WindowDecorations="None" CanResize="False" ShowInTaskbar="False" Topmost="True" ShowActivated="False"
+        Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+
+    <Window.Styles>
+        <Style Selector="TextBlock.secondary">
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+    </Window.Styles>
+
+    <!-- Shown by the app when an update is found; doesn't take focus -->
+    <Border BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" Padding="14">
+        <StackPanel Spacing="10">
+            <TextBlock Text="Update available" FontSize="16" FontWeight="SemiBold" />
+            <TextBlock Classes="secondary" Text="{Binding UpdateMessage}" TextWrapping="Wrap" />
+
+            <StackPanel Spacing="6" IsVisible="{Binding IsUpdating}">
+                <TextBlock Text="Installing…" />
+                <ProgressBar IsIndeterminate="True" />
+            </StackPanel>
+
+            <TextBlock Classes="secondary" Foreground="#DA3633" Text="{Binding LastError}" TextWrapping="Wrap"
+                       IsVisible="{Binding LastError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+            <Grid ColumnDefinitions="Auto,*,Auto,8,Auto" IsEnabled="{Binding !IsUpdating}">
+                <Button Content="What's new" Command="{Binding OpenReleaseNotesCommand}"
+                        ToolTip.Tip="Open the release notes on GitHub" />
+                <Button Grid.Column="2" Content="Later" Command="{Binding DismissUpdateCommand}"
+                        ToolTip.Tip="Remind me with the next version" />
+                <Button Grid.Column="4" Classes="accent" Content="Update now"
+                        Command="{Binding InstallUpdateCommand}" />
+            </Grid>
+        </StackPanel>
+    </Border>
+</Window>
