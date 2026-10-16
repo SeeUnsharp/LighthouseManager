@@ -12,6 +12,7 @@ include the following third-party components. LighthouseManager itself is licens
 | [Tmds.DBus, Tmds.DBus.Protocol](https://github.com/tmds/Tmds.DBus) | service, CLI, tray (Linux) | MIT | Copyright Tom Deseyn, Alp Toker |
 | [Polly.Core](https://github.com/App-vNext/Polly) | service, CLI | BSD-3-Clause | Copyright (c) 2015-2026, App vNext |
 | [Serilog, Serilog.Enrichers.Thread, Serilog.Extensions.Hosting, Serilog.Extensions.Logging, Serilog.Sinks.Console, Serilog.Sinks.File](https://github.com/serilog/serilog) | service, CLI | Apache-2.0 | Copyright © Serilog Contributors |
+| [MQTTnet](https://github.com/dotnet/MQTTnet) | service | MIT | Copyright (c) .NET Foundation and Contributors |
 | [FluentArgs](https://github.com/kutoga/FluentArgs) | CLI | BSD-3-Clause | Copyright (c) 2019, Benjamin Bruno Meier |
 | [Avalonia (Avalonia, Desktop, Skia, HarfBuzz, Win32, X11, FreeDesktop, Native, Themes.Fluent, Remote.Protocol)](https://github.com/AvaloniaUI/Avalonia) | tray | MIT | Copyright 2013-2026 © The AvaloniaUI Project |
 | [Avalonia.Angle.Windows.Natives (ANGLE)](https://chromium.googlesource.com/angle/angle) | tray (Windows) | BSD-3-Clause | Copyright 2018 The ANGLE Project Authors |

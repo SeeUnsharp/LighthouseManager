@@ -196,6 +196,65 @@
             </TabItem>
 
             <!-- ================= General ================= -->
+            <!-- ================= Home Assistant ================= -->
+            <TabItem Header="Home Assistant">
+                <ScrollViewer>
+                    <StackPanel Spacing="10" Margin="0,8,8,0" DataContext="{Binding HomeAssistant}"
+                                x:DataType="vm:HomeAssistantViewModel">
+                        <TextBlock Classes="secondary" TextWrapping="Wrap"
+                                   Text="Control LighthouseManager from Home Assistant through an MQTT broker (e.g. the Mosquitto add-on). With the MQTT integration set up in Home Assistant, this computer and its base stations appear there automatically." />
+
+                        <CheckBox Content="Connect to Home Assistant (MQTT)" IsChecked="{Binding Enabled}" />
+
+                        <Grid ColumnDefinitions="*,8,110" RowDefinitions="Auto,Auto" IsEnabled="{Binding Enabled}">
+                            <TextBlock Classes="secondary" Text="Broker" />
+                            <TextBox Grid.Row="1" Text="{Binding Host}" PlaceholderText="e.g. homeassistant.local" />
+                            <TextBlock Grid.Column="2" Classes="secondary" Text="Port" />
+                            <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding Port}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto" IsEnabled="{Binding Enabled}">
+                            <TextBlock Classes="secondary" Text="Username" />
+                            <TextBox Grid.Row="1" Text="{Binding Username}" PlaceholderText="Optional" />
+                            <TextBlock Grid.Column="2" Classes="secondary" Text="Password" />
+                            <Grid Grid.Row="1" Grid.Column="2" ColumnDefinitions="*,Auto">
+                                <TextBox Text="{Binding Password}" PasswordChar="•"
+                                         PlaceholderText="{Binding PasswordPlaceholder}" />
+                                <Button Grid.Column="1" Classes="small" Content="Remove" Margin="6,0,0,0"
+                                        VerticalAlignment="Center" Command="{Binding ClearPasswordCommand}"
+                                        IsVisible="{Binding CanRemovePassword}"
+                                        ToolTip.Tip="Delete the stored password when you save" />
+                            </Grid>
+                        </Grid>
+                        <CheckBox Content="Use TLS (usually port 8883)" IsChecked="{Binding UseTls}"
+                                  IsEnabled="{Binding Enabled}" />
+
+                        <Expander Header="Advanced" IsEnabled="{Binding Enabled}" HorizontalAlignment="Stretch">
+                            <StackPanel Spacing="6">
+                                <TextBlock Classes="secondary" TextWrapping="Wrap"
+                                           Text="Node ID: identifies this computer in Home Assistant. Leave empty to use the computer name." />
+                                <TextBox Text="{Binding NodeId}" PlaceholderText="{Binding DefaultNodeId}" />
+                                <TextBlock Classes="secondary" Text="Discovery prefix (Home Assistant's default: homeassistant)" />
+                                <TextBox Text="{Binding DiscoveryPrefix}" />
+                                <TextBlock Classes="secondary" Text="Base topic" />
+                                <TextBox Text="{Binding BaseTopic}" />
+                            </StackPanel>
+                        </Expander>
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <Ellipse Classes="dot" Classes.awake="{Binding IsConnected}"
+                                         Classes.error="{Binding HasProblem}" />
+                                <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Save" Command="{Binding SaveCommand}"
+                                    IsEnabled="{Binding !IsSaving}" />
+                        </Grid>
+                        <TextBlock Classes="secondary" TextWrapping="Wrap"
+                                   Text="The password is stored unencrypted in mqtt.json in your settings folder, readable by your user only. Use a separate MQTT user for LighthouseManager, not your Home Assistant login." />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
             <TabItem Header="General">
                 <ScrollViewer>
                     <StackPanel Spacing="10" Margin="0,8,8,0">

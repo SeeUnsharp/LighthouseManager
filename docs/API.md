@@ -96,6 +96,8 @@ for a few seconds fixed it).
 | `POST` | `/api/discovery?seconds=10` | Search for base stations nearby (3–60 s, default 10), see [Discovery](#discovery) |
 | `POST` | `/api/stations` | Body `{"addresses": ["AA:BB:CC:DD:EE:01", …]}`: add base stations, returns the status |
 | `DELETE` | `/api/stations/{address}` | Remove a base station, returns the status (`404` if not configured) |
+| `GET` | `/api/mqtt` | [Home Assistant / MQTT](#home-assistant-mqtt) settings and connection status (never the password) |
+| `PUT` | `/api/mqtt` | Change them, see [Home Assistant / MQTT](#home-assistant-mqtt); `400` with `{"error": "…"}` if invalid |
 
 `identify` makes the LED blink. Note that the base station firmware also **wakes a sleeping station** on identify, and
 it stays awake until it gets a sleep command. The service re-reads the state about 5 seconds later, so clients see
@@ -146,6 +148,51 @@ A manual `wake` or `sleep` always wins. It cancels a running automatic wake/slee
 undo it: automatic handling resumes the next time a trigger process starts or the last one exits. The same applies
 after turning automatic mode back on. Nothing happens until the trigger state changes. `identify` and `refresh` don't
 affect automatic handling.
+
+## Home Assistant (MQTT)
+
+The service can connect to an MQTT broker (e.g. Home Assistant's Mosquitto add-on) and announces this computer and
+its base stations through [MQTT discovery](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery). It
+connects outward, so the HTTP API stays on loopback. Off by default.
+
+`GET /api/mqtt`:
+
+```json
+{
+  "enabled": true, "host": "homeassistant.local", "port": 1883, "username": "lighthouse", "hasPassword": true,
+  "useTls": false, "discoveryPrefix": "homeassistant", "baseTopic": "lighthousemanager", "nodeId": "",
+  "defaultNodeId": "gamingpc", "connected": true, "error": null
+}
+```
+
+`PUT /api/mqtt` takes the same fields (without `hasPassword`, `defaultNodeId`, `connected`, `error`) plus
+`password`: `null` keeps the stored password, `""` removes it. `discoveryPrefix`, `baseTopic` and `nodeId` may be
+`null` to keep them. The settings are saved to `mqtt.json` next to the user settings file (owner-only permissions on
+Linux) and take effect immediately (reconnect). An empty `nodeId` uses the computer name (`defaultNodeId`).
+
+Topics (`{base}` = `{baseTopic}/{nodeId}`, `{mac}` = address as 12 lowercase hex digits). All states are retained:
+
+| Topic | Payload |
+|---|---|
+| `{base}/availability` | `online` / `offline` (also the last will) |
+| `{base}/automatic` | `ON` / `OFF` |
+| `{base}/trigger` | `ON` / `OFF`; `{base}/trigger/attributes`: `{"process": "vrserver"}` |
+| `{base}/station/{mac}/power` | `ON` (awake or booting) / `OFF` (sleeping or standby) / `None` (unknown) |
+| `{base}/station/{mac}/state` | `unknown`, `sleeping`, `standby`, `booting`, `awake`; attributes in `…/attributes` |
+
+Commands (same effect as the tray: manual commands win over automatic mode). Publish them without the retain flag:
+retained commands are ignored, otherwise they would run again on every connect.
+
+| Topic | Payload |
+|---|---|
+| `{base}/cmd/automatic` | `ON` / `OFF` |
+| `{base}/cmd/wake_all`, `{base}/cmd/sleep_all`, `{base}/cmd/refresh` | anything |
+| `{base}/cmd/station/{mac}/power` | `ON` / `OFF` |
+| `{base}/cmd/station/{mac}/identify` | anything |
+
+Home Assistant gets one device for the computer (automatic mode, *VR app running*, *Turn all on*, *Sleep all*,
+*Refresh*) and one per base station (*Power*, *State*, *Identify*). When the integration is turned off or the topics
+change, the service removes its entities and retained topics again.
 
 ## Events
 

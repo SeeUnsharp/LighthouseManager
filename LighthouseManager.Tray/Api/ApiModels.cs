@@ -42,6 +42,34 @@ public sealed record AddStationsRequest(string[] Addresses);
 
 public sealed record TriggerList(string[] Processes);
 
+public sealed record ApiError(string Error);
+
+public sealed record MqttConfig(
+    bool Enabled,
+    string Host,
+    int Port,
+    string Username,
+    bool HasPassword,
+    bool UseTls,
+    string DiscoveryPrefix,
+    string BaseTopic,
+    string NodeId,
+    string DefaultNodeId,
+    bool Connected,
+    string? Error);
+
+/// <param name="Password">null keeps the stored password.</param>
+public sealed record MqttConfigRequest(
+    bool Enabled,
+    string Host,
+    int Port,
+    string Username,
+    string? Password,
+    bool UseTls,
+    string? DiscoveryPrefix,
+    string? BaseTopic,
+    string? NodeId);
+
 public sealed record DiscoveredStationInfo(string Address, string Name, bool Configured);
 
 public sealed record DiscoveryResult(DiscoveredStationInfo[] Stations);
@@ -52,5 +80,8 @@ public sealed record DiscoveryResult(DiscoveredStationInfo[] Stations);
 [JsonSerializable(typeof(AutomaticModeRequest))]
 [JsonSerializable(typeof(AddStationsRequest))]
 [JsonSerializable(typeof(TriggerList))]
+[JsonSerializable(typeof(ApiError))]
+[JsonSerializable(typeof(MqttConfig))]
+[JsonSerializable(typeof(MqttConfigRequest))]
 [JsonSerializable(typeof(DiscoveryResult))]
 internal partial class ApiJsonContext : JsonSerializerContext;

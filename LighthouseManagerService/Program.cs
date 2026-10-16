@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Hosting.Server;
 using LighthouseManager.Core;
 using LighthouseManagerService;
+using LighthouseManagerService.Mqtt;
 using Serilog;
 
 AppLogging.Configure("LighthouseManagerService.log");
@@ -45,6 +46,9 @@ try
     builder.Services.AddSingleton<BaseStationManager>();
     builder.Services.AddSingleton<StationController>();
     builder.Services.AddHostedService<Worker>();
+    // Home Assistant via MQTT (off until configured)
+    builder.Services.AddSingleton<MqttBridge>();
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<MqttBridge>());
 
     // The API settings are needed before the host is built, so they are read directly
     var settings = builder.Configuration.GetSection("AppSettings").Get<AppSettings>() ?? new AppSettings();

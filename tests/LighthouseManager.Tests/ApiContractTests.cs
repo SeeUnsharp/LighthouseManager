@@ -92,6 +92,26 @@ public class ApiContractTests
     }
 
     [Fact]
+    public void Mqtt_config_round_trips_and_never_contains_a_password()
+    {
+        var json = JsonSerializer.Serialize(new Server.MqttConfig(true, "broker", 1883, "user", true, false,
+            "homeassistant", "lighthousemanager", "", "gamingpc", true, null), Server.ApiJsonContext.Default.MqttConfig);
+        var client = JsonSerializer.Deserialize(json, Client.ApiJsonContext.Default.MqttConfig)!;
+
+        Assert.True(client.HasPassword);
+        Assert.Equal("gamingpc", client.DefaultNodeId);
+        Assert.True(client.Connected);
+        Assert.DoesNotContain("\"password\"", json);
+
+        var request = JsonSerializer.Serialize(new Client.MqttConfigRequest(true, "broker", 8883, "user", null, true,
+            null, null, "pc"), Client.ApiJsonContext.Default.MqttConfigRequest);
+        var server = JsonSerializer.Deserialize(request, Server.ApiJsonContext.Default.MqttConfigRequest)!;
+        Assert.Null(server.Password);
+        Assert.Equal(8883, server.Port);
+        Assert.Equal("pc", server.NodeId);
+    }
+
+    [Fact]
     public void Command_result_round_trips()
     {
         var json = JsonSerializer.Serialize(new Server.CommandResult(false, Snapshot),
