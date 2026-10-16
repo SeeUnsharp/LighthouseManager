@@ -10,7 +10,10 @@ namespace LighthouseManagerService;
 /// </summary>
 public sealed class StationController
 {
+    private const string StuckMessage = "Doesn't finish starting up. Check its power and LED.";
+
     private readonly SemaphoreSlim _bluetoothLock = new(1, 1);
+    private readonly BootWatch _bootWatch = new();
     private readonly ILogger<StationController> _logger;
     private readonly BaseStationManager _manager;
     private readonly Dictionary<ulong, StationInfo> _stations;
@@ -149,6 +152,8 @@ public sealed class StationController
             if (!_stations.Remove(address)) return false;
         }
 
+        _bootWatch.Forget(address);
+
         Save();
         _logger.LogInformation("Removed base station {Address}", MacAddress.Format(address));
         Publish();
@@ -190,7 +195,8 @@ public sealed class StationController
                             Powerstate.Sleep => StationState.Sleeping,
                             _ => StationState.Standby
                         },
-                        Busy = false, Error = null, UpdatedAt = DateTimeOffset.UtcNow
+                        // The raw value is only known again after the next read
+                        RawState = null, Busy = false, Error = null, UpdatedAt = DateTimeOffset.UtcNow
                     });
                 else
                     Update([address], s => s with
@@ -198,7 +204,17 @@ public sealed class StationController
                         Busy = false, Error = token.IsCancellationRequested ? s.Error : $"'{state}' failed"
                     });
 
-                if (success && state == Powerstate.Wake) ScheduleRefresh([address], TimeSpan.FromSeconds(10));
+                if (success && state == Powerstate.Wake)
+                {
+                    // Follow the start-up until the station reports Awake (see BootWatch)
+                    _bootWatch.Woken(address, DateTime.UtcNow);
+                    ScheduleRefresh([address], TimeSpan.FromSeconds(10));
+                }
+                else if (success)
+                {
+                    _bootWatch.Forget(address);
+                }
+
                 return success;
             }));
 
@@ -230,11 +246,20 @@ public sealed class StationController
             {
                 var reading = await _manager.ReadStateAsync(address, token);
                 if (reading != null)
+                {
+                    var verdict = _bootWatch.Observe(address, reading.State, DateTime.UtcNow);
+                    if (verdict == BootWatch.Verdict.Stuck)
+                        _logger.LogWarning("{Address}: Still starting up after {Minutes} minutes (raw 0x{Raw:X2})",
+                            MacAddress.Format(address), BootWatch.StuckAfter.TotalMinutes, reading.RawValue);
                     Update([address], s => s with
                     {
                         State = reading.State, RawState = reading.RawValue, Name = reading.Name ?? s.Name,
-                        Busy = false, Error = null, UpdatedAt = DateTimeOffset.UtcNow
+                        Busy = false, Error = verdict == BootWatch.Verdict.Stuck ? StuckMessage : null,
+                        UpdatedAt = DateTimeOffset.UtcNow
                     });
+                    // Starting up: read again soon, so the UI shows "On" (or the stuck error) promptly
+                    if (verdict == BootWatch.Verdict.CheckAgain) ScheduleRefresh([address], BootWatch.CheckInterval);
+                }
                 else
                     Update([address], s => token.IsCancellationRequested
                         ? s with { Busy = false }
