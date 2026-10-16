@@ -9,6 +9,8 @@ The solution consists of:
 - **LighthouseManager.Tray**: tray icon with a flyout to see and control the base stations (a client of the API, so you can build your own UI as well)
 - **LighthouseManager**: standalone command-line tool
 
+> **Note:** LighthouseManager is a hobby project I work on in my free time. Most of the code for version 2.0 (the .NET 10 migration, Linux support, service API, tray app and installers) was generated with AI ([Claude Code](https://claude.com/claude-code)). I reviewed it and tested it with real base stations on Windows and Linux, but please keep that in mind and report anything that looks off in the [issues](../../issues).
+
 ## Requirements
 - Windows 10 64bit (minimum 10.0.19041.0) or Linux x64 with BlueZ 5.50+
 - Integrated Bluetooth or dongle managed by the OS
