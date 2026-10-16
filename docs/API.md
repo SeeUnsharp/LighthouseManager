@@ -48,7 +48,8 @@ The API is only meant for clients on the same machine:
 `state` is cached. It's read at service start, every `AppSettings:StateRefreshInterval` seconds (default 300, 0 = off),
 after commands, and on `refresh`. A station woken by a command reports `booting` until a read shows it awake: after a wake it's read
 again after about 10 seconds and then every 15 seconds while it reports `booting`. A station that is still `booting`
-after 2 minutes gets `error` "Doesn't finish starting up…" (observed: raw `0x01` for hours).
+after 2 minutes gets `error` "Doesn't finish starting up…" (observed: raw `0x01` for hours; unplugging the station
+for a few seconds fixed it).
 
 ### Status
 

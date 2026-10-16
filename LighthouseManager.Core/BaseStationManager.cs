@@ -240,13 +240,14 @@ public sealed class BaseStationManager(ILogger<BaseStationManager> logger)
                 var current = await characteristic.ReadValueAsync().WaitAsync(cancellationToken);
                 if (current is { Length: > 0 } && Lighthouse.IsInState(current[0], state))
                 {
-                    logger.LogInformation("{Address}: State already {State}.", mac, state);
+                    // ToString(): the log template's ":lj" would render an enum as quoted JSON in trimmed builds
+                    logger.LogInformation("{Address}: State already {State}.", mac, state.ToString());
                     return;
                 }
 
                 await characteristic.WriteValueWithResponseAsync([Lighthouse.WriteValue(state)])
                     .WaitAsync(cancellationToken);
-                logger.LogInformation("{Address}: Successfully executed '{State}' command.", mac, state);
+                logger.LogInformation("{Address}: Successfully executed '{State}' command.", mac, state.ToString());
             });
     }
 
