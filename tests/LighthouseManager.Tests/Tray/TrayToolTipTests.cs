@@ -38,6 +38,14 @@ public class TrayToolTipTests
     }
 
     [Fact]
+    public void Mentions_an_available_update_below_the_status()
+    {
+        var text = TrayToolTip.Build("No trigger process running", [("LHB-1A2B3C4D", "On")], "2.0.1");
+
+        Assert.Equal("LighthouseManager\nNo trigger process running\nUpdate available: 2.0.1\nLHB-1A2B3C4D: On", text);
+    }
+
+    [Fact]
     public void Shows_only_the_status_without_stations()
     {
         Assert.Equal("LighthouseManager\nService not reachable (127.0.0.1:47800)",

@@ -11,9 +11,12 @@ public static class TrayToolTip
     /// <summary>
     ///     One line per station while it fits, a summary ("2 On, 1 Sleeping") otherwise.
     /// </summary>
-    public static string Build(string statusText, IReadOnlyList<(string Name, string State)> stations)
+    /// <param name="updateVersion">Version of an available update, shown right below the status.</param>
+    public static string Build(string statusText, IReadOnlyList<(string Name, string State)> stations,
+        string? updateVersion = null)
     {
         var header = $"LighthouseManager\n{statusText}";
+        if (updateVersion != null) header += $"\nUpdate available: {updateVersion}";
         if (stations.Count == 0) return Truncate(header);
 
         var detailed = header + "\n" + string.Join("\n", stations.Select(s => $"{s.Name}: {s.State}"));

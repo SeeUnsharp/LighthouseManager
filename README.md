@@ -22,7 +22,7 @@ Download from [Releases](../../releases/latest):
 
 Then add your base stations: on first start the tray searches for base stations nearby and offers the ones it found; *Add selected* adds them. Later, *Find* in the flyout (or *Find base stations…* in the tray menu) adds more, and *Remove* in a station's right-click menu removes one.
 
-The tray app shows when a new version is available; *Update* installs it and restarts.
+When a new version is available, the tray shows a small notice with *Update now*, *Later* and *What's new*, a refresh badge on the tray icon and an *Update to …* entry in its menu. *Later* hides the notice until the next version; the badge, the menu entry and the button in the flyout stay. Updating installs the new version and restarts the app.
 
 Without installing, the zip downloads from the CI builds work as well; see [Manual setup](#manual-setup).
 
