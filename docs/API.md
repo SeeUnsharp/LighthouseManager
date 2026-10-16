@@ -180,7 +180,8 @@ Topics (`{base}` = `{baseTopic}/{nodeId}`, `{mac}` = address as 12 lowercase hex
 | `{base}/station/{mac}/power` | `ON` (awake or booting) / `OFF` (sleeping or standby) / `None` (unknown) |
 | `{base}/station/{mac}/state` | `unknown`, `sleeping`, `standby`, `booting`, `awake`; attributes in `…/attributes` |
 
-Commands (same effect as the tray: manual commands win over automatic mode):
+Commands (same effect as the tray: manual commands win over automatic mode). Publish them without the retain flag:
+retained commands are ignored, otherwise they would run again on every connect.
 
 | Topic | Payload |
 |---|---|

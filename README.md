@@ -135,7 +135,7 @@ LighthouseManager can be controlled from [Home Assistant](https://www.home-assis
 2. In the tray app, open *Settings → Home Assistant*, tick *Connect to Home Assistant (MQTT)*, enter the broker address (e.g. `homeassistant.local`), port (`1883`, or `8883` with TLS), username and password, and click *Save*. The status shows *Connected*.
 3. In Home Assistant, a device *LighthouseManager (your computer)* appears, plus one device per base station.
 
-The connection goes from LighthouseManager to the broker, so nothing on your computer is opened to the network. The password is stored unencrypted in `mqtt.json` next to your settings file, readable by your user only. For the topics, see [docs/API.md](docs/API.md#home-assistant-mqtt).
+The connection goes from LighthouseManager to the broker, so nothing on your computer is opened to the network. The password is stored unencrypted in `mqtt.json` next to your settings file, readable by your user only; *Remove* next to the password field deletes it. If you send commands from your own automations or scripts, don't set *retain*: retained commands are ignored. For the topics, see [docs/API.md](docs/API.md#home-assistant-mqtt).
 
 # Building packages
 `build/pack.sh <linux-x64|win-x64> <version>` builds the AppImage or the Windows installer with [Velopack](https://velopack.io) (both on Linux; needs the .NET 10 SDK, `vpk` and, for the AppImage, `mksquashfs`). Pushing a tag like `v2.1.0` builds both and publishes a GitHub release (`.github/workflows/release.yml`).
