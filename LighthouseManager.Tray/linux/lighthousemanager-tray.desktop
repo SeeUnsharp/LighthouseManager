@@ -1,0 +1,9 @@
+[Desktop Entry]
+# Autostart: copy to ~/.config/autostart/ and adjust Exec
+Type=Application
+Name=LighthouseManager Tray
+Comment=Tray icon to control Lighthouse base stations
+Exec=sh -c '$HOME/LighthouseManager/LighthouseManager.Tray'
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true

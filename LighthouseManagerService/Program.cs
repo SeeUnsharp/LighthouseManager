@@ -1,66 +1,94 @@
-using System;
-using System.IO;
-using System.Reflection;
-using LighthouseManager.Shared;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using LighthouseManager.Core;
+using LighthouseManagerService;
 using Serilog;
-using Serilog.Enrichers;
-using Serilog.Events;
-using Serilog.Sinks.SystemConsole.Themes;
 
-namespace LighthouseManagerService
+AppLogging.Configure("LighthouseManagerService.log");
+
+// Two services would fight over the Bluetooth connections (and the API port)
+using var instance = SingleInstance.TryAcquire("service");
+if (instance == null)
 {
-    public class Program
-    {
-        public static void Main(string[] args)
-        {
-            const string loggerTemplate =
-                @"{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u4}]<{ThreadId}> [{SourceContext:l}] {Message:lj}{NewLine}{Exception}";
-            var logfile = Path.Combine(Helper.GetBasePath(), "App_Data", "logs", "LighthouseManagerService.log");
-            Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-                .Enrich.With(new ThreadIdEnricher())
-                .Enrich.FromLogContext()
-                .WriteTo.Console(LogEventLevel.Information, loggerTemplate, theme: AnsiConsoleTheme.Literate)
-                .WriteTo.File(logfile, LogEventLevel.Information, loggerTemplate,
-                    rollingInterval: RollingInterval.Day, retainedFileCountLimit: 90)
-                .CreateLogger();
-
-            try
-            {
-                Log.Information("====================================================================");
-                Log.Information($"Application Starts. Version: {Assembly.GetEntryAssembly()?.GetName().Version}");
-                Log.Information($"Application Directory: {AppDomain.CurrentDomain.BaseDirectory}");
-                CreateHostBuilder(args).Build().Run();
-            }
-            catch (Exception e)
-            {
-                Log.Fatal(e, "Application terminated unexpectedly");
-            }
-            finally
-            {
-                Log.Information("====================================================================\r\n");
-                Log.CloseAndFlush();
-            }
-        }
-
-        public static IHostBuilder CreateHostBuilder(string[] args)
-        {
-            return Host.CreateDefaultBuilder(args)
-                .UseWindowsService()
-                .ConfigureAppConfiguration((context, config) =>
-                {
-                    config.SetBasePath(Helper.GetBasePath());
-                    config.AddJsonFile("appsettings.json", false);
-                })
-                .ConfigureServices((hostContext, services) =>
-                {
-                    services.AddHostedService<Worker>();
-                    services.Configure<AppSettings>(hostContext.Configuration.GetSection("AppSettings"));
-                })
-                .UseSerilog();
-        }
-    }
+    // Exit code 0: systemd / the scheduled task must not restart it in a loop
+    Log.Warning("LighthouseManagerService is already running for this user, exiting");
+    await AppLogging.CloseAsync();
+    return 0;
 }
+
+try
+{
+    // Content root next to the executable so appsettings.json is found when started as Windows service / systemd unit
+    var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
+    {
+        Args = args,
+        ContentRootPath = AppContext.BaseDirectory
+    });
+
+    UserSettings.AddTo(builder.Configuration);
+
+    // Both are no-ops unless running as a Windows service or under systemd
+    builder.Services.AddWindowsService(o => o.ServiceName = "LighthouseManager");
+    builder.Services.AddSystemd();
+
+    builder.Services.AddSerilog();
+    // Invalid settings fail the start (non-zero exit) instead of a running service that does nothing
+    builder.Services.AddOptions<AppSettings>()
+        .Bind(builder.Configuration.GetSection("AppSettings"))
+        .Validate(s => s.Interval >= 1000, "AppSettings:Interval lower than 1000 milliseconds is not allowed.")
+        // Empty is allowed: a freshly installed service runs, and the tray shows where to add base stations
+        .Validate(s => s.TryGetAddresses(out _),
+            "AppSettings:BaseStationAddresses contains an invalid address (comma separated MAC addresses).")
+        .Validate(s => s.GetTriggerProcesses().Count > 0,
+            "AppSettings:TriggerProcesses must contain at least one process name (comma separated).")
+        .Validate(s => s.StateRefreshInterval >= 0, "AppSettings:StateRefreshInterval must not be negative.")
+        .ValidateOnStart();
+    builder.Services.AddSingleton<BaseStationManager>();
+    builder.Services.AddSingleton<StationController>();
+    builder.Services.AddHostedService<Worker>();
+
+    // The API settings are needed before the host is built, so they are read directly
+    var settings = builder.Configuration.GetSection("AppSettings").Get<AppSettings>() ?? new AppSettings();
+    var apiEnabled = !string.IsNullOrWhiteSpace(settings.ApiUrl);
+    if (apiEnabled)
+    {
+        if (!Uri.TryCreate(settings.ApiUrl, UriKind.Absolute, out var apiUri) || apiUri.Scheme != Uri.UriSchemeHttp)
+            throw new InvalidOperationException($"AppSettings:ApiUrl '{settings.ApiUrl}' is not a valid http URL.");
+        builder.WebHost.UseUrls(settings.ApiUrl);
+    }
+    else
+    {
+        // Kestrel would fall back to localhost:5000 without URLs, so replace the server to not listen at all
+        builder.Services.AddSingleton<IServer, NoListenerServer>();
+    }
+
+    // Same contract everywhere: the source generated context carries naming and enum settings
+    builder.Services.ConfigureHttpJsonOptions(o =>
+    {
+        o.SerializerOptions.TypeInfoResolverChain.Insert(0, ApiJsonContext.Default);
+        o.SerializerOptions.Converters.Add(new CamelCaseEnumConverter<StationState>());
+    });
+
+    var allowedOrigins = settings.GetAllowedOrigins();
+    builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
+        p.WithOrigins(allowedOrigins.ToArray()).AllowAnyHeader().AllowAnyMethod()));
+
+    var app = builder.Build();
+    app.UseLocalRequestGuard(allowedOrigins);
+    app.UseCors();
+    app.MapApi();
+
+    if (apiEnabled) Log.Information("API listening on {Url}", settings.ApiUrl);
+    await app.RunAsync();
+}
+catch (Exception e)
+{
+    Log.Fatal(e, "Application terminated unexpectedly");
+    // Non-zero so systemd Restart=on-failure / Windows service recovery can kick in
+    return 1;
+}
+finally
+{
+    await AppLogging.CloseAsync();
+}
+
+return 0;

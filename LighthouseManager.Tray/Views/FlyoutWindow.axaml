@@ -1,0 +1,179 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LighthouseManager.Tray.ViewModels"
+        x:Class="LighthouseManager.Tray.Views.FlyoutWindow"
+        x:DataType="vm:MainViewModel"
+        Title="LighthouseManager"
+        Width="360" SizeToContent="Height"
+        WindowDecorations="None" CanResize="False" ShowInTaskbar="False" Topmost="True"
+        Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+
+    <Window.Styles>
+        <Style Selector="Ellipse.dot">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Height" Value="10" />
+            <Setter Property="Fill" Value="Gray" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Ellipse.dot.awake">
+            <Setter Property="Fill" Value="#2EA043" />
+        </Style>
+        <Style Selector="Ellipse.dot.busy">
+            <Setter Property="Fill" Value="#D29922" />
+        </Style>
+        <Style Selector="Ellipse.dot.error">
+            <Setter Property="Fill" Value="#DA3633" />
+        </Style>
+        <Style Selector="TextBlock.secondary">
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="Button.small">
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+    </Window.Styles>
+
+    <Border BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" Padding="14">
+        <!-- Header and footer stay fixed; only the station list scrolls when the window hits MaxHeight -->
+        <DockPanel>
+            <StackPanel DockPanel.Dock="Top" Spacing="12" Margin="0,0,0,12">
+                <!-- Header -->
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel>
+                        <TextBlock Text="Base Stations" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Classes="secondary" Text="{Binding StatusText}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top"
+                                IsEnabled="{Binding Connected}">
+                        <Button Classes="small" Content="Find" Command="{Binding FindStationsCommand}"
+                                ToolTip.Tip="Search for base stations nearby and add them" />
+                        <Button Classes="small" Content="Refresh" Command="{Binding RefreshCommand}"
+                                ToolTip.Tip="Read the current state of all base stations" />
+                        <Button Classes="small" Content="⚙" Command="{Binding ShowSettingsCommand}"
+                                ToolTip.Tip="Settings" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- Automatic mode -->
+                <Grid ColumnDefinitions="*,Auto" IsEnabled="{Binding Connected}">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Automatic mode" />
+                        <TextBlock Classes="secondary" Text="Wake and sleep with the trigger processes" />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" OnContent="" OffContent=""
+                                  IsChecked="{Binding AutomaticMode, Mode=OneWay}"
+                                  Command="{Binding SetAutomaticModeCommand}"
+                                  CommandParameter="{Binding $self.IsChecked}" />
+                </Grid>
+
+                <Separator />
+            </StackPanel>
+
+            <StackPanel DockPanel.Dock="Bottom" Spacing="12" Margin="0,12,0,0">
+                <TextBlock Classes="secondary" Foreground="#DA3633" Text="{Binding LastError}" TextWrapping="Wrap"
+                           IsVisible="{Binding LastError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                <Separator />
+
+                <!-- All stations -->
+                <Grid ColumnDefinitions="*,8,*" IsEnabled="{Binding HasStations}">
+                    <Button Content="Turn all on" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Command="{Binding WakeAllCommand}" />
+                    <Button Grid.Column="2" Content="Sleep all" HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center" Command="{Binding SleepAllCommand}" />
+                </Grid>
+
+                <!-- Version and updates -->
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="secondary" Text="{Binding VersionText}" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="small" Content="{Binding UpdateText}"
+                            Command="{Binding InstallUpdateCommand}" IsVisible="{Binding IsUpdateAvailable}"
+                            IsEnabled="{Binding !IsUpdating}"
+                            ToolTip.Tip="Download and install the new version, then restart" />
+                </Grid>
+            </StackPanel>
+
+            <!-- Discovery: search progress and found base stations to add -->
+            <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12" IsVisible="{Binding ShowDiscovery}">
+                <StackPanel Spacing="6" IsVisible="{Binding IsDiscovering}">
+                    <TextBlock Text="Searching for base stations…" />
+                    <ProgressBar IsIndeterminate="True" />
+                </StackPanel>
+                <StackPanel Spacing="6" IsVisible="{Binding HasFound}">
+                    <TextBlock Text="Found base stations" FontWeight="SemiBold" />
+                    <ItemsControl ItemsSource="{Binding Found}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:FoundStationViewModel">
+                                <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Classes="small" Content="Add selected" Command="{Binding AddFoundCommand}" />
+                        <Button Classes="small" Content="Cancel" Command="{Binding CloseDiscoveryCommand}" />
+                    </StackPanel>
+                </StackPanel>
+                <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding DiscoveryMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <TextBlock Classes="secondary" Text="{Binding DiscoveryMessage}" TextWrapping="Wrap"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="small" Content="OK" Command="{Binding CloseDiscoveryCommand}" />
+                </Grid>
+            </StackPanel>
+
+            <!-- No base stations configured yet (e.g. right after installing) -->
+            <StackPanel DockPanel.Dock="Top" Spacing="8" IsVisible="{Binding HasNoStations}">
+                <TextBlock Text="No base stations configured" FontWeight="SemiBold" />
+                <TextBlock Classes="secondary" TextWrapping="Wrap"
+                           Text="Use Find to search for them, or add their addresses to the settings file:" />
+                <TextBlock Classes="secondary" Text="{Binding SettingsFile}" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="small" Content="Find base stations" Command="{Binding FindStationsCommand}" />
+                    <Button Classes="small" Content="Open settings" Command="{Binding OpenSettingsCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Stations -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          AllowAutoHide="False" IsEnabled="{Binding Connected}">
+                <ItemsControl ItemsSource="{Binding Stations}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="10" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:StationViewModel">
+                            <Grid ColumnDefinitions="Auto,*,Auto" Background="Transparent">
+                                <Grid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Remove" Command="{Binding RemoveCommand}" />
+                                    </ContextMenu>
+                                </Grid.ContextMenu>
+                                <Ellipse Classes="dot" Margin="0,0,10,0"
+                                         Classes.awake="{Binding IsAwake}"
+                                         Classes.busy="{Binding Busy}"
+                                         Classes.error="{Binding HasError}" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                    <TextBlock Classes="secondary" Text="{Binding StateText}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
+                                            VerticalAlignment="Center">
+                                    <!-- Only while running: identify also wakes a sleeping station (firmware). Leftmost, so
+                                         On/Sleep stay aligned across rows when it's hidden. -->
+                                    <Button Classes="small" Content="Identify" Command="{Binding IdentifyCommand}"
+                                            IsVisible="{Binding IsAwake}" ToolTip.Tip="Flash the LED" />
+                                    <Button Classes="small" Content="On" Command="{Binding WakeCommand}"
+                                            ToolTip.Tip="Turn on" />
+                                    <Button Classes="small" Content="Sleep" Command="{Binding SleepCommand}"
+                                            ToolTip.Tip="Put to sleep" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </DockPanel>
+    </Border>
+</Window>

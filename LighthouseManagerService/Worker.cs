@@ -1,89 +1,133 @@
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using LighthouseManager.Shared;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
+using LighthouseManager.Core;
 using Microsoft.Extensions.Options;
 
-namespace LighthouseManagerService
+namespace LighthouseManagerService;
+
+/// <summary>
+///     Wakes the base stations while one of the configured trigger processes runs (default: SteamVR's vrserver)
+///     and puts them to sleep when all of them exited. Also refreshes the cached power state periodically.
+///     The decisions are made by <see cref="AutomationPolicy" />.
+/// </summary>
+public class Worker(ILogger<Worker> logger, IOptions<AppSettings> settings, StationController controller)
+    : BackgroundService
 {
-    public class Worker : BackgroundService
+    private readonly AutomationPolicy _policy = new(10, TimeSpan.FromSeconds(30));
+
+    private Task<bool> _job = Task.FromResult(true);
+    private bool _jobFailureHandled = true;
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        private static bool _started;
-        private readonly ILogger<Worker> _logger;
-        private readonly IOptions<AppSettings> _settings;
-        private readonly string _lighthouseManagerPath;
+        var triggers = controller.TriggerProcesses;
+        var addresses = controller.Addresses;
+        logger.LogInformation("Interval: {Interval}, BaseStationAddresses: {Addresses}, TriggerProcesses: {Triggers}",
+            settings.Value.Interval, string.Join(',', addresses.Select(MacAddress.Format)), string.Join(',', triggers));
+        if (addresses.Count == 0)
+            logger.LogWarning("No base stations configured. Add them in the tray app (it searches for them) or in {File}.",
+                AppPaths.UserSettingsFile);
+        logger.LogInformation("Start watching trigger processes.");
 
+        var refreshInterval = TimeSpan.FromSeconds(settings.Value.StateRefreshInterval);
+        var refresh = controller.RefreshAsync(null, stoppingToken);
+        var lastRefresh = DateTime.UtcNow;
 
-        public Worker(ILogger<Worker> logger, IOptions<AppSettings> settings)
+        // Polling instead of Process.Exited: exit events for non-child processes are unreliable on Linux
+        try
         {
-            _logger = logger;
-            _settings = settings;
-
-            _lighthouseManagerPath = Path.Combine(Helper.GetBasePath(), "LighthouseManager.exe");
-            _logger.LogInformation("LighthouseManager location: " + _lighthouseManagerPath);
-            _logger.LogInformation("Interval: " + _settings.Value.Interval);
-            _logger.LogInformation("BaseStationAddresses: " + _settings.Value.BaseStationAddresses);
-        }
-
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            if (!File.Exists(_lighthouseManagerPath))
-            {
-                _logger.LogCritical(
-                    $"{_lighthouseManagerPath} not found.");
-                return;
-            }
-
-            if (_settings.Value.Interval < 1000)
-            {
-                _logger.LogError("Interval lower than 1000 milliseconds is not allowed");
-                return;
-            }
-
-            _logger.LogInformation("Start listening for SteamVR events.");
             while (!stoppingToken.IsCancellationRequested)
             {
-                WatchForSteamVrProcess();
-                await Task.Delay(_settings.Value.Interval, stoppingToken);
+                var now = DateTime.UtcNow;
+                // Current list: trigger processes can be changed through the API at any time
+                var runningTrigger = FindRunningTrigger(controller.TriggerProcesses);
+                controller.SetActiveTrigger(runningTrigger);
+
+                // Faulted counts as failed; reading Result of a faulted task would throw and stop the service
+                var jobFailed = _job.IsCompleted && !(_job.IsCompletedSuccessfully && _job.Result);
+                if (jobFailed && !_jobFailureHandled && _job.IsFaulted)
+                    logger.LogError(_job.Exception, "Automatic wake/sleep crashed");
+                var newFailure = jobFailed && !_jobFailureHandled;
+                if (newFailure)
+                {
+                    _jobFailureHandled = true;
+                    _policy.ReportFailure(now);
+                }
+
+                var next = _policy.Next(runningTrigger != null, controller.AutomaticMode,
+                    controller.ManualOverrideVersion, jobFailed, now);
+
+                // A failure caused by a manual command or disabling automatic mode is not worth an error
+                if (newFailure && next == null && _policy.WillRetry)
+                    logger.LogError("Automatic wake/sleep failed for one or more base stations, trying again in 30s");
+                else if (newFailure && next == null && _policy.GaveUp)
+                    logger.LogError(
+                        "Automatic wake/sleep failed for one or more base stations, giving up until trigger state changes");
+
+                if (next is { } state)
+                {
+                    if (_policy.Attempts > 1)
+                        logger.LogWarning("Retrying '{State}' for base stations (attempt {Attempt}/{Max})", state.ToString(),
+                            _policy.Attempts, _policy.MaxAttempts);
+                    else if (state == Powerstate.Wake)
+                        logger.LogInformation("'{Process}' detected, waking base stations", runningTrigger);
+                    else
+                        logger.LogInformation("Trigger processes closed, putting base stations to sleep");
+
+                    // A new automatic job cancels the previous one inside the controller
+                    _jobFailureHandled = false;
+                    // Current list: base stations can be added through the API at any time
+                    _job = controller.SetPowerAsync(controller.Addresses, state, true, stoppingToken);
+                }
+
+                if (refreshInterval > TimeSpan.Zero && refresh.IsCompleted && now - lastRefresh >= refreshInterval)
+                {
+                    refresh = controller.RefreshAsync(null, stoppingToken);
+                    lastRefresh = now;
+                }
+
+                await Task.Delay(settings.Value.Interval, stoppingToken);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            // Operations use stoppingToken, so they are cancelled already; don't leave a Bluetooth connection behind.
+            // Base stations are deliberately not put to sleep here: stopping the service during a VR session must
+            // not kill tracking.
+            try
+            {
+                await Task.WhenAll(_job, refresh);
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Operation failed during shutdown");
+            }
+        }
+    }
+
+    /// <returns>The first configured trigger (in configuration order) that is running, or null.</returns>
+    private static string? FindRunningTrigger(IReadOnlyList<string> triggers)
+    {
+        var triggerSet = new HashSet<string>(triggers, StringComparer.OrdinalIgnoreCase);
+        // One pass over the process table per poll, independent of the number of triggers
+        var running = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var process in Process.GetProcesses())
+        {
+            using (process)
+            {
+                try
+                {
+                    if (triggerSet.Contains(process.ProcessName)) running.Add(process.ProcessName);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Exited while enumerating
+                }
             }
         }
 
-        private void WatchForSteamVrProcess()
-        {
-            if (_started) return;
-
-            var process = Process.GetProcessesByName("vrserver").SingleOrDefault();
-
-            if (process == null) return;
-            _started = true;
-
-            process.EnableRaisingEvents = true;
-
-            _logger.LogInformation("SteamVR detected");
-            _logger.LogInformation(
-                $"Starting LighthouseManager and wake base stations: {_settings.Value.BaseStationAddresses}");
-
-            var lighthouseManagerProcess = Process.Start(_lighthouseManagerPath,
-                $"-w -a {_settings.Value.BaseStationAddresses}");
-
-            process.Exited += delegate
-            {
-                // If LighthouseManager is still trying to start base station (but SteamVR exited) it should just stop for next actions
-                if (lighthouseManagerProcess != null && !lighthouseManagerProcess.HasExited)
-                    lighthouseManagerProcess.Kill();
-
-                _logger.LogInformation("SteamVR closed");
-                _logger.LogInformation(
-                    $"Starting LighthouseManager and sleep base stations: {_settings.Value.BaseStationAddresses}");
-                lighthouseManagerProcess = Process.Start(_lighthouseManagerPath,
-                    $"-s -a {_settings.Value.BaseStationAddresses}");
-
-                _started = false;
-            };
-        }
+        return triggers.FirstOrDefault(running.Contains);
     }
 }
