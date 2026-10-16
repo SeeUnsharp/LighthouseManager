@@ -21,7 +21,7 @@ public sealed class MqttBridge(ILogger<MqttBridge> logger, StationController con
     private readonly object _sync = new();
     private readonly Dictionary<string, string> _publishedConfigs = [];
     private readonly Dictionary<string, string> _publishedStates = [];
-    private MqttSettings _settings = MqttSettingsStore.Load();
+    private MqttSettings _settings = MqttSettingsStore.Load(logger);
     private CancellationTokenSource _settingsChanged = new();
     private bool _connected;
     private string? _error;
@@ -91,8 +91,8 @@ public sealed class MqttBridge(ILogger<MqttBridge> logger, StationController con
 
             try
             {
-                await RunSessionAsync(settings, session.Token);
-                backoff = MinBackoff;
+                // A session that got connected starts the next retries at the minimum again
+                await RunSessionAsync(settings, () => backoff = MinBackoff, session.Token);
             }
             catch (OperationCanceledException) when (session.IsCancellationRequested)
             {
@@ -110,7 +110,7 @@ public sealed class MqttBridge(ILogger<MqttBridge> logger, StationController con
         }
     }
 
-    private async Task RunSessionAsync(MqttSettings settings, CancellationToken ct)
+    private async Task RunSessionAsync(MqttSettings settings, Action connected, CancellationToken ct)
     {
         var ha = new HomeAssistantMqtt(settings, AppPaths.Version);
         var factory = new MqttClientFactory();
@@ -146,7 +146,7 @@ public sealed class MqttBridge(ILogger<MqttBridge> logger, StationController con
                 // Home Assistant restarted: announce everything again
                 if (payload == HomeAssistantMqtt.Online) RepublishAll(client, ha);
             }
-            else if (ha.ParseCommand(topic, payload) is { } command)
+            else if (ha.ParseCommand(topic, payload, e.ApplicationMessage.Retain) is { } command)
             {
                 _ = ExecuteAsync(command);
             }
@@ -179,6 +179,7 @@ public sealed class MqttBridge(ILogger<MqttBridge> logger, StationController con
 
         await PublishAsync(client, new MqttMessage(ha.AvailabilityTopic, HomeAssistantMqtt.Online), ct);
         SetConnected(true, null);
+        connected();
         logger.LogInformation("MQTT: connected, announcing to Home Assistant as \"{NodeId}\"", ha.NodeId);
 
         using var run = CancellationTokenSource.CreateLinkedTokenSource(ct, lost.Token);

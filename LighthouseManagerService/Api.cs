@@ -38,9 +38,10 @@ public static class Api
             var settings = current with
             {
                 Enabled = request.Enabled,
-                Host = request.Host.Trim(),
+                // Missing fields arrive as null despite the record's types; validation reports a missing host
+                Host = request.Host?.Trim() ?? "",
                 Port = request.Port,
-                Username = request.Username.Trim(),
+                Username = request.Username?.Trim() ?? "",
                 // null keeps the stored password; the API never returns it
                 Password = request.Password ?? current.Password,
                 UseTls = request.UseTls,

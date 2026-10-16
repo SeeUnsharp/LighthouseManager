@@ -121,6 +121,15 @@ public class HomeAssistantMqttTests
         Assert.Null(_ha.ParseCommand(topic, payload));
     }
 
+    [Fact]
+    public void Retained_commands_are_ignored()
+    {
+        // E.g. published with "retain": would otherwise wake the station again on every connect
+        const string topic = "lighthousemanager/gamingpc/cmd/station/aabbccddee01/power";
+        Assert.NotNull(_ha.ParseCommand(topic, "ON"));
+        Assert.Null(_ha.ParseCommand(topic, "ON", retained: true));
+    }
+
     [Theory]
     [InlineData(true, "", 1883, "homeassistant", "lighthousemanager", "", false)]
     [InlineData(false, "", 1883, "homeassistant", "lighthousemanager", "", true)]

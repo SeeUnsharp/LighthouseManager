@@ -216,8 +216,14 @@
                             <TextBlock Classes="secondary" Text="Username" />
                             <TextBox Grid.Row="1" Text="{Binding Username}" PlaceholderText="Optional" />
                             <TextBlock Grid.Column="2" Classes="secondary" Text="Password" />
-                            <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding Password}" PasswordChar="•"
-                                     PlaceholderText="{Binding PasswordPlaceholder}" />
+                            <Grid Grid.Row="1" Grid.Column="2" ColumnDefinitions="*,Auto">
+                                <TextBox Text="{Binding Password}" PasswordChar="•"
+                                         PlaceholderText="{Binding PasswordPlaceholder}" />
+                                <Button Grid.Column="1" Classes="small" Content="Remove" Margin="6,0,0,0"
+                                        VerticalAlignment="Center" Command="{Binding ClearPasswordCommand}"
+                                        IsVisible="{Binding CanRemovePassword}"
+                                        ToolTip.Tip="Delete the stored password when you save" />
+                            </Grid>
                         </Grid>
                         <CheckBox Content="Use TLS (usually port 8883)" IsChecked="{Binding UseTls}"
                                   IsEnabled="{Binding Enabled}" />

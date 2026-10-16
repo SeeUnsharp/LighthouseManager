@@ -158,11 +158,15 @@ public sealed class HomeAssistantMqtt(MqttSettings settings, string version)
         return messages;
     }
 
+    /// <param name="retained">
+    ///     The broker delivered a stored message. Commands are only taken live: a retained command would otherwise run
+    ///     again on every connect (e.g. wake a station at each service start).
+    /// </param>
     /// <returns>The command, or null if the topic/payload isn't one.</returns>
-    public MqttCommand? ParseCommand(string topic, string payload)
+    public MqttCommand? ParseCommand(string topic, string payload, bool retained = false)
     {
         var prefix = $"{BaseTopic}/cmd/";
-        if (!topic.StartsWith(prefix, StringComparison.Ordinal)) return null;
+        if (retained || !topic.StartsWith(prefix, StringComparison.Ordinal)) return null;
         var parts = topic[prefix.Length..].Split('/');
         var on = payload.Trim().Equals(On, StringComparison.OrdinalIgnoreCase);
         var off = payload.Trim().Equals(Off, StringComparison.OrdinalIgnoreCase);

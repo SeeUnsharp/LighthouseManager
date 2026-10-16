@@ -81,7 +81,10 @@ public static class MqttSettingsStore
 {
     public static string FilePath => Path.Combine(AppPaths.ConfigDirectory, "mqtt.json");
 
-    public static MqttSettings Load()
+    /// <summary>
+    ///     The stored settings; defaults (off) if there is no file or it can't be read (logged).
+    /// </summary>
+    public static MqttSettings Load(ILogger logger)
     {
         try
         {
@@ -91,6 +94,8 @@ public static class MqttSettingsStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
+            logger.LogWarning("MQTT: can't read {File}, Home Assistant integration stays off: {Message}", FilePath,
+                ex.Message);
             return new MqttSettings();
         }
     }

@@ -25,8 +25,14 @@ public sealed partial class HomeAssistantViewModel(ApiClient api) : ObservableOb
     [ObservableProperty] private string _discoveryPrefix = "homeassistant";
     [ObservableProperty] private string _baseTopic = "lighthousemanager";
 
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(PasswordPlaceholder))]
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(PasswordPlaceholder), nameof(CanRemovePassword))]
     private bool _hasPassword;
+
+    /// <summary>
+    ///     The stored password is deleted with the next save.
+    /// </summary>
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(PasswordPlaceholder), nameof(CanRemovePassword))]
+    private bool _removePassword;
 
     [ObservableProperty] private string _defaultNodeId = "";
 
@@ -38,7 +44,23 @@ public sealed partial class HomeAssistantViewModel(ApiClient api) : ObservableOb
 
     [ObservableProperty] private bool _isSaving;
 
-    public string PasswordPlaceholder => HasPassword ? "Stored, leave empty to keep it" : "Password (optional)";
+    public string PasswordPlaceholder => RemovePassword ? "Removed when you save"
+        : HasPassword ? "Stored, leave empty to keep it" : "Password (optional)";
+
+    public bool CanRemovePassword => HasPassword && !RemovePassword;
+
+    // Typing a new password replaces the stored one anyway
+    partial void OnPasswordChanged(string value)
+    {
+        if (value.Length > 0) RemovePassword = false;
+    }
+
+    [RelayCommand]
+    private void ClearPassword()
+    {
+        Password = "";
+        RemovePassword = true;
+    }
 
     public bool IsConnected => Status is { Enabled: true, Connected: true };
 
@@ -58,6 +80,7 @@ public sealed partial class HomeAssistantViewModel(ApiClient api) : ObservableOb
     /// </summary>
     public async Task LoadAsync()
     {
+        SaveError = null;
         try
         {
             Apply(await api.GetMqttAsync(), loadFields: true);
@@ -81,9 +104,12 @@ public sealed partial class HomeAssistantViewModel(ApiClient api) : ObservableOb
         IsSaving = true;
         try
         {
-            var result = await api.SetMqttAsync(new MqttConfigRequest(Enabled, Host, port, Username,
-                Password.Length > 0 ? Password : null, UseTls, DiscoveryPrefix, BaseTopic, NodeId));
+            // null keeps the stored password, "" deletes it
+            var password = Password.Length > 0 ? Password : RemovePassword ? "" : null;
+            var result = await api.SetMqttAsync(new MqttConfigRequest(Enabled, Host, port, Username, password,
+                UseTls, DiscoveryPrefix, BaseTopic, NodeId));
             Password = "";
+            RemovePassword = false;
             Apply(result, loadFields: false);
 
             // Connecting takes a moment; show the outcome
@@ -113,6 +139,7 @@ public sealed partial class HomeAssistantViewModel(ApiClient api) : ObservableOb
         Port = config.Port.ToString();
         Username = config.Username;
         Password = "";
+        RemovePassword = false;
         UseTls = config.UseTls;
         NodeId = config.NodeId;
         DiscoveryPrefix = config.DiscoveryPrefix;
