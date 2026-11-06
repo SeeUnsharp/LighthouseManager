@@ -185,8 +185,16 @@ public sealed class StationController
             // Per station, so each one shows its own result as soon as it's done
             var results = await Task.WhenAll(addresses.Select(async address =>
             {
-                var success = await _manager.ChangePowerstateAsync([address], state, token);
-                if (success)
+                var change = await _manager.ChangePowerstateAsync(address, state, token);
+                var success = change != null;
+                if (change is { Written: false, Before: var reading })
+                    // Already there: the state read before is current, no start-up to follow
+                    Update([address], s => s with
+                    {
+                        State = reading.State, RawState = reading.RawValue, Name = reading.Name ?? s.Name,
+                        Busy = false, Error = null, UpdatedAt = DateTimeOffset.UtcNow
+                    });
+                else if (success)
                     Update([address], s => s with
                     {
                         State = state switch
@@ -205,7 +213,7 @@ public sealed class StationController
                         Busy = false, Error = token.IsCancellationRequested ? s.Error : $"'{state}' failed"
                     });
 
-                if (success && state == Powerstate.Wake)
+                if (change is { Written: true } && state == Powerstate.Wake)
                 {
                     // Follow the start-up until the station reports Awake (see BootWatch)
                     _bootWatch.Woken(address, DateTime.UtcNow);

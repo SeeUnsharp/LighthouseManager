@@ -158,6 +158,18 @@ public sealed class BaseStationManager(ILogger<BaseStationManager> logger)
     }
 
     /// <summary>
+    ///     Changes the power state of one base station.
+    /// </summary>
+    /// <returns>null if it failed (within the retry budget).</returns>
+    public async Task<PowerChange?> ChangePowerstateAsync(ulong address, Powerstate state,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await RunWithRetryAsync(address, token => ChangePowerstateOnceAsync(address, state, token),
+            cancellationToken);
+        return result.Success ? result.Value : null;
+    }
+
+    /// <summary>
     ///     Flashes the LED of a base station.
     /// </summary>
     /// <returns>true on success (within the retry budget).</returns>
@@ -230,24 +242,28 @@ public sealed class BaseStationManager(ILogger<BaseStationManager> logger)
             });
     }
 
-    private async Task ChangePowerstateOnceAsync(ulong address, Powerstate state, CancellationToken cancellationToken)
+    private async Task<PowerChange> ChangePowerstateOnceAsync(ulong address, Powerstate state,
+        CancellationToken cancellationToken)
     {
         var mac = MacAddress.Format(address);
-        await WithCharacteristicAsync(address, Lighthouse.PowerstateCharacteristic, cancellationToken,
-            async characteristic =>
+        return await WithCharacteristicAsync(address, Lighthouse.PowerstateCharacteristic, cancellationToken,
+            async (device, characteristic) =>
             {
                 // Skip writing if the base station is already in the requested state
                 var current = await characteristic.ReadValueAsync().WaitAsync(cancellationToken);
-                if (current is { Length: > 0 } && Lighthouse.IsInState(current[0], state))
+                var raw = current is { Length: > 0 } ? current[0] : (byte)0xFF;
+                var before = new StationReading(Lighthouse.ToStationState(raw), device.Name, raw);
+                if (current is { Length: > 0 } && Lighthouse.IsInState(raw, state))
                 {
                     // ToString(): the log template's ":lj" would render an enum as quoted JSON in trimmed builds
                     logger.LogInformation("{Address}: State already {State}.", mac, state.ToString());
-                    return;
+                    return new PowerChange(false, before);
                 }
 
                 await characteristic.WriteValueWithResponseAsync([Lighthouse.WriteValue(state)])
                     .WaitAsync(cancellationToken);
                 logger.LogInformation("{Address}: Successfully executed '{State}' command.", mac, state.ToString());
+                return new PowerChange(true, before);
             });
     }
 

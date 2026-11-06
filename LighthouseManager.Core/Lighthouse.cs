@@ -28,6 +28,13 @@ public enum StationState
 public sealed record StationReading(StationState State, string? Name, byte RawValue);
 
 /// <summary>
+///     Result of a power state change.
+/// </summary>
+/// <param name="Written">false if the station already was in the requested state, so nothing was written.</param>
+/// <param name="Before">The state read before writing (every change reads first).</param>
+public sealed record PowerChange(bool Written, StationReading Before);
+
+/// <summary>
 ///     Lighthouse 2.0 GATT layout, see https://gist.github.com/BenWoodford/3a1e500a4ea2673525f5adb4120fd47c
 /// </summary>
 internal static class Lighthouse
