@@ -95,6 +95,15 @@ public sealed class ApiClient(Uri baseAddress) : IDisposable
         return (await response.Content.ReadFromJsonAsync(ApiJsonContext.Default.StatusSnapshot, cts.Token))!;
     }
 
+    public async Task<StatusSnapshot> SetDimmingAsync(bool enabled)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var response = await _http.PutAsJsonAsync("api/dimming", new DimmingRequest(enabled),
+            ApiJsonContext.Default.DimmingRequest, cts.Token);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync(ApiJsonContext.Default.StatusSnapshot, cts.Token))!;
+    }
+
     /// <summary>
     ///     Streams status snapshots (Server-Sent Events) until the connection drops or <paramref name="ct" /> fires.
     /// </summary>

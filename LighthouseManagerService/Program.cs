@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Hosting.Server;
 using LighthouseManager.Core;
 using LighthouseManagerService;
+using LighthouseManagerService.Dimming;
 using LighthouseManagerService.Mqtt;
 using Serilog;
 
@@ -46,6 +47,7 @@ try
     builder.Services.AddSingleton<BaseStationManager>();
     builder.Services.AddSingleton<StationController>();
     builder.Services.AddHostedService<Worker>();
+    builder.Services.AddHostedService<DisplayDimmer>();
     // Home Assistant via MQTT (off until configured)
     builder.Services.AddSingleton<MqttBridge>();
     builder.Services.AddHostedService(sp => sp.GetRequiredService<MqttBridge>());

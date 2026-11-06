@@ -28,6 +28,15 @@ public static class Api
             return c.GetSnapshot();
         });
 
+        api.MapPut("/dimming", (DimmingRequest request, StationController c) =>
+        {
+            if (!c.DimmingSupported)
+                return TypedResults.Json(new ApiError("Dimming displays needs Linux with KDE Plasma 6.1 or newer"),
+                    ApiJsonContext.Default.ApiError, statusCode: StatusCodes.Status400BadRequest);
+            c.DimDisplaysInVr = request.Enabled;
+            return Results.Ok(c.GetSnapshot());
+        });
+
         api.MapGet("/stations", (StationController c) => c.GetSnapshot().Stations);
 
         api.MapGet("/mqtt", (MqttBridge mqtt) => ToMqttConfig(mqtt));
@@ -145,23 +154,8 @@ public static class Api
 
     private static string[] RunningProcessNames()
     {
-        var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var process in System.Diagnostics.Process.GetProcesses())
-        {
-            using (process)
-            {
-                try
-                {
-                    if (process.ProcessName.Length > 0) names.Add(process.ProcessName);
-                }
-                catch (InvalidOperationException)
-                {
-                    // Exited while enumerating
-                }
-            }
-        }
-
-        return names.ToArray();
+        return new SortedSet<string>(RunningProcesses.List().Select(p => p.Name).Where(n => n.Length > 0),
+            StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     private static async Task<IResult> ForStation(string address, StationController c,
@@ -201,6 +195,8 @@ internal sealed class NoListenerServer : IServer
 }
 
 public sealed record AutomaticModeRequest(bool Enabled);
+
+public sealed record DimmingRequest(bool Enabled);
 
 public sealed record AddStationsRequest(string[] Addresses);
 
@@ -256,6 +252,7 @@ public sealed class CamelCaseEnumConverter<TEnum>() : JsonStringEnumConverter<TE
 [JsonSerializable(typeof(StationInfo[]))]
 [JsonSerializable(typeof(CommandResult))]
 [JsonSerializable(typeof(AutomaticModeRequest))]
+[JsonSerializable(typeof(DimmingRequest))]
 [JsonSerializable(typeof(AddStationsRequest))]
 [JsonSerializable(typeof(TriggerList))]
 [JsonSerializable(typeof(ApiError))]

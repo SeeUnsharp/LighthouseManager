@@ -14,7 +14,8 @@ public class HomeAssistantMqttTests
     private static readonly StationInfo Unknown = new("AA:BB:CC:DD:EE:02");
 
     private static StatusSnapshot Status(params StationInfo[] stations) =>
-        new(true, true, "vrserver", ["vrserver"], stations, "/settings.json", "2.1.0");
+        new(true, true, "vrserver", ["vrserver"], stations, "/settings.json", "2.1.0",
+            new DimmingStatus(true, false, false, null));
 
     [Fact]
     public void Topics_are_per_computer()

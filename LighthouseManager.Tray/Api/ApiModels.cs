@@ -32,11 +32,16 @@ public sealed record StatusSnapshot(
     string[] TriggerProcesses,
     StationInfo[] Stations,
     string? SettingsFile = null,
-    string? Version = null);
+    string? Version = null,
+    DimmingStatus? Dimming = null);
+
+public sealed record DimmingStatus(bool Supported, bool Enabled, bool Dimmed, string? Game);
 
 public sealed record CommandResult(bool Success, StatusSnapshot Status);
 
 public sealed record AutomaticModeRequest(bool Enabled);
+
+public sealed record DimmingRequest(bool Enabled);
 
 public sealed record AddStationsRequest(string[] Addresses);
 
@@ -78,6 +83,7 @@ public sealed record DiscoveryResult(DiscoveredStationInfo[] Stations);
 [JsonSerializable(typeof(StatusSnapshot))]
 [JsonSerializable(typeof(CommandResult))]
 [JsonSerializable(typeof(AutomaticModeRequest))]
+[JsonSerializable(typeof(DimmingRequest))]
 [JsonSerializable(typeof(AddStationsRequest))]
 [JsonSerializable(typeof(TriggerList))]
 [JsonSerializable(typeof(ApiError))]

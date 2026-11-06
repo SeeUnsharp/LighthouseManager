@@ -31,6 +31,12 @@ public class AppSettings
     public int StateRefreshInterval { get; set; } = 300;
 
     /// <summary>
+    ///     Dims the desktop displays to the lowest brightness while a VR game is shown and restores them afterwards.
+    ///     Linux with Monado (also through Envision) and KDE Plasma 6.1+ for now.
+    /// </summary>
+    public bool DimDisplaysInVr { get; set; }
+
+    /// <summary>
     ///     Address of the HTTP API. Empty disables the API. Keep it on loopback: the API has no authentication.
     /// </summary>
     public string ApiUrl { get; set; } = "http://127.0.0.1:47800";

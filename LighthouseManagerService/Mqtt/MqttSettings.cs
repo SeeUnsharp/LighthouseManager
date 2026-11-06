@@ -102,17 +102,8 @@ public static class MqttSettingsStore
 
     public static void Save(MqttSettings settings)
     {
-        Directory.CreateDirectory(AppPaths.ConfigDirectory);
-        var temp = FilePath + ".tmp";
-        var json = JsonSerializer.Serialize(settings, MqttSettingsJsonContext.Default.MqttSettings);
-
-        // Create the temporary file with owner-only permissions before the password is written into it
-        var options = new FileStreamOptions { Mode = FileMode.Create, Access = FileAccess.Write };
-        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        using (var stream = new FileStream(temp, options))
-        using (var writer = new StreamWriter(stream))
-            writer.Write(json);
-
-        File.Move(temp, FilePath, true);
+        // Owner-only permissions from the start, before the password is written into it
+        AtomicFile.WriteAllText(FilePath,
+            JsonSerializer.Serialize(settings, MqttSettingsJsonContext.Default.MqttSettings), ownerOnly: true);
     }
 }
