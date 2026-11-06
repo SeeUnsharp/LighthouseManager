@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using LighthouseManager.Core;
 using Microsoft.Extensions.Options;
 
@@ -110,24 +109,8 @@ public class Worker(ILogger<Worker> logger, IOptions<AppSettings> settings, Stat
     /// <returns>The first configured trigger (in configuration order) that is running, or null.</returns>
     private static string? FindRunningTrigger(IReadOnlyList<string> triggers)
     {
-        var triggerSet = new HashSet<string>(triggers, StringComparer.OrdinalIgnoreCase);
         // One pass over the process table per poll, independent of the number of triggers
-        var running = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var process in Process.GetProcesses())
-        {
-            using (process)
-            {
-                try
-                {
-                    if (triggerSet.Contains(process.ProcessName)) running.Add(process.ProcessName);
-                }
-                catch (InvalidOperationException)
-                {
-                    // Exited while enumerating
-                }
-            }
-        }
-
+        var running = new HashSet<string>(RunningProcesses.List().Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
         return triggers.FirstOrDefault(running.Contains);
     }
 }

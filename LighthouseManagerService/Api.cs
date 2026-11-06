@@ -145,23 +145,8 @@ public static class Api
 
     private static string[] RunningProcessNames()
     {
-        var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var process in System.Diagnostics.Process.GetProcesses())
-        {
-            using (process)
-            {
-                try
-                {
-                    if (process.ProcessName.Length > 0) names.Add(process.ProcessName);
-                }
-                catch (InvalidOperationException)
-                {
-                    // Exited while enumerating
-                }
-            }
-        }
-
-        return names.ToArray();
+        return new SortedSet<string>(RunningProcesses.List().Select(p => p.Name).Where(n => n.Length > 0),
+            StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     private static async Task<IResult> ForStation(string address, StationController c,
