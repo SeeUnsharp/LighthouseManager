@@ -206,8 +206,8 @@ data: {"automaticMode":true,"triggerActive":false,"triggerProcess":null,...}
 ```
 
 Each event carries the full status, so clients don't need to merge partial updates. A client that falls behind only
-gets the latest status. If the connection drops (for example on a service restart), reconnect and you'll receive the
-current status again.
+gets the latest status. When the service stops, it ends the stream normally. If the stream ends or the connection
+drops (for example on a service restart), reconnect and you'll receive the current status again.
 
 ## Examples
 

@@ -39,6 +39,14 @@ public sealed class StationController
         _stations = addresses.ToDictionary(a => a, a => new StationInfo(MacAddress.Format(a)));
         _triggerProcesses = settings.Value.GetTriggerProcesses();
         _automaticMode = settings.Value.AutomaticMode;
+
+        // Kestrel waits for open requests when stopping: end the live streams (/api/events), otherwise every stop
+        // with the tray app connected took the 30 s shutdown timeout
+        _stopping.Register(() =>
+        {
+            lock (_sync)
+                foreach (var subscriber in _subscribers) subscriber.Writer.TryComplete();
+        });
     }
 
     /// <summary>
@@ -299,7 +307,12 @@ public sealed class StationController
     {
         var channel = Channel.CreateBounded<StatusSnapshot>(
             new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest });
-        lock (_sync) _subscribers.Add(channel);
+        lock (_sync)
+        {
+            _subscribers.Add(channel);
+            // Subscribed while stopping: only the current snapshot
+            if (_stopping.IsCancellationRequested) channel.Writer.TryComplete();
+        }
 
         try
         {
