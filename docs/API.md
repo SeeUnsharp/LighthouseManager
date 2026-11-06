@@ -61,7 +61,8 @@ for a few seconds fixed it).
   "triggerProcesses": ["vrserver"],
   "stations": [ /* Station objects */ ],
   "settingsFile": "/home/user/.config/lighthousemanager/appsettings.json",
-  "version": "2.0.0"
+  "version": "2.0.0",
+  "dimming": { "supported": true, "enabled": true, "dimmed": false, "game": null }
 }
 ```
 
@@ -74,6 +75,7 @@ for a few seconds fixed it).
 | `stations` | All configured stations, in configuration order (empty until base stations are configured) |
 | `settingsFile` | The user settings file to add base stations to (restart the service afterwards) |
 | `version` | Version of the service |
+| `dimming` | [Dimming displays during VR](#dimming-displays-during-vr): `supported` (this platform can do it), `enabled`, `dimmed` (right now), `game` (the VR game being shown, or `null`) |
 
 ## Endpoints
 
@@ -82,6 +84,7 @@ for a few seconds fixed it).
 | `GET` | `/api/status` | Current [status](#status) |
 | `GET` | `/api/events` | Live status as Server-Sent Events, see [Events](#events) |
 | `PUT` | `/api/automatic` | Body `{"enabled": true\|false}`, returns the status; saved to the user settings file |
+| `PUT` | `/api/dimming` | Body `{"enabled": true\|false}`: [dim displays during VR](#dimming-displays-during-vr), returns the status; saved to the user settings file; `400` with `{"error": "…"}` where not supported |
 | `GET` | `/api/triggers` | Trigger processes: `{"processes": ["vrserver"]}` |
 | `PUT` | `/api/triggers` | Body `{"processes": ["vrserver", "monado-service"]}`: replace the trigger processes (trimmed, without `.exe`, at least one; otherwise `400`), returns the status; takes effect immediately and is saved |
 | `GET` | `/api/processes` | Names of the running applications, `{"processes": [...]}`, to offer as trigger processes |
@@ -148,6 +151,14 @@ A manual `wake` or `sleep` always wins. It cancels a running automatic wake/slee
 undo it: automatic handling resumes the next time a trigger process starts or the last one exits. The same applies
 after turning automatic mode back on. Nothing happens until the trigger state changes. `identify` and `refresh` don't
 affect automatic handling.
+
+### Dimming displays during VR
+
+With `dimming.enabled`, the service dims the desktop displays to the lowest brightness while a VR game is shown and
+restores them about 10 seconds after it ended, each as a short fade. A display whose brightness was changed meanwhile
+is left as it is. Independent of the base stations and of automatic mode. Linux only for now (`dimming.supported`):
+games are detected through Monado (also used by Envision), the brightness is changed through KDE Plasma 6.1 or newer
+(external monitors need DDC/CI).
 
 ## Home Assistant (MQTT)
 

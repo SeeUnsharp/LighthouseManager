@@ -16,7 +16,8 @@ public class ApiContractTests
             false, null, new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.Zero)),
         new Server.StationInfo("AA:BB:CC:DD:EE:02", null, LighthouseManager.Core.StationState.Booting, null, true,
             "Not reachable")
-    ], "/home/user/.config/lighthousemanager/appsettings.json", "2.1.0");
+    ], "/home/user/.config/lighthousemanager/appsettings.json", "2.1.0",
+        new Server.DimmingStatus(true, true, true, "Beat Saber"));
 
     [Fact]
     public void Status_snapshot_round_trips_from_service_to_tray()
@@ -30,6 +31,7 @@ public class ApiContractTests
         Assert.Equal(["vrserver", "monado-service"], client.TriggerProcesses);
         Assert.Equal("/home/user/.config/lighthousemanager/appsettings.json", client.SettingsFile);
         Assert.Equal("2.1.0", client.Version);
+        Assert.Equal(new Client.DimmingStatus(true, true, true, "Beat Saber"), client.Dimming);
         Assert.Collection(client.Stations,
             s =>
             {
@@ -62,6 +64,15 @@ public class ApiContractTests
         Assert.Contains("\"rawState\":11", json);
         Assert.Contains("\"settingsFile\":", json);
         Assert.Contains("\"version\":\"2.1.0\"", json);
+        Assert.Contains("\"dimming\":{\"supported\":true,\"enabled\":true,\"dimmed\":true,\"game\":\"Beat Saber\"}", json);
+    }
+
+    [Fact]
+    public void Dimming_request_round_trips()
+    {
+        var json = JsonSerializer.Serialize(new Client.DimmingRequest(true), Client.ApiJsonContext.Default.DimmingRequest);
+
+        Assert.True(JsonSerializer.Deserialize(json, Server.ApiJsonContext.Default.DimmingRequest)!.Enabled);
     }
 
     [Fact]

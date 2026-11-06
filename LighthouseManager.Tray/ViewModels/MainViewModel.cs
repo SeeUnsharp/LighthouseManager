@@ -30,6 +30,11 @@ public sealed partial class MainViewModel : ObservableObject
     // Set from the API; changing it from the UI goes through SetAutomaticModeCommand
     [ObservableProperty] private bool _automaticMode;
 
+    // Same for dimming: SetDimDisplaysCommand
+    [ObservableProperty] private bool _dimDisplays;
+
+    [ObservableProperty] private bool _dimmingSupported;
+
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText))]
     private string? _triggerProcess;
 
@@ -442,10 +447,29 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    /// <param name="enabled">The switch's new state, see <see cref="SetAutomaticMode" />.</param>
+    [RelayCommand]
+    private async Task SetDimDisplays(bool enabled)
+    {
+        LastError = null;
+        try
+        {
+            Apply(await _api.SetDimmingAsync(enabled));
+        }
+        catch (Exception ex)
+        {
+            LastError = ex.Message;
+            OnPropertyChanged(nameof(DimDisplays));
+        }
+    }
+
     private void Apply(StatusSnapshot snapshot)
     {
         Connected = true;
         AutomaticMode = snapshot.AutomaticMode;
+        // Older services don't report it
+        DimmingSupported = snapshot.Dimming?.Supported ?? false;
+        DimDisplays = snapshot.Dimming?.Enabled ?? false;
         TriggerProcess = snapshot.TriggerProcess;
         SettingsFile = snapshot.SettingsFile;
         if (!TriggerProcesses.SequenceEqual(snapshot.TriggerProcesses)) TriggerProcesses = snapshot.TriggerProcesses;

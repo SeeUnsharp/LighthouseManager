@@ -67,6 +67,7 @@ Settings (`AppSettings` section):
 - `Interval` polling interval in milliseconds (minimum 1000)
 - `AutomaticMode` whether trigger processes wake/sleep the base stations (default `true`; the tray app / API change and save it)
 - `StateRefreshInterval` how often the power state of the base stations is read, in seconds (default `300`, `0` = off)
+- `DimDisplaysInVr` dims the desktop displays to the lowest brightness while a VR game is shown and restores them afterwards (default `false`; the tray app / API change and save it). Linux only for now: needs Monado (also through Envision) and KDE Plasma 6.1 or newer; external monitors need DDC/CI. A display you change during the game is left as it is
 - `ApiUrl` address of the [HTTP API](docs/API.md) (default `http://127.0.0.1:47800`, empty = off). The API has no authentication, keep it on loopback
 - `AllowedOrigins` comma separated browser origins allowed to use the API, for web based UIs (default: none)
 

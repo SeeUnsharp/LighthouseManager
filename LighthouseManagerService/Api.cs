@@ -28,6 +28,15 @@ public static class Api
             return c.GetSnapshot();
         });
 
+        api.MapPut("/dimming", (DimmingRequest request, StationController c) =>
+        {
+            if (!StationController.DimmingSupported)
+                return TypedResults.Json(new ApiError("Dimming displays is not supported on this platform yet"),
+                    ApiJsonContext.Default.ApiError, statusCode: StatusCodes.Status400BadRequest);
+            c.DimDisplaysInVr = request.Enabled;
+            return Results.Ok(c.GetSnapshot());
+        });
+
         api.MapGet("/stations", (StationController c) => c.GetSnapshot().Stations);
 
         api.MapGet("/mqtt", (MqttBridge mqtt) => ToMqttConfig(mqtt));
@@ -187,6 +196,8 @@ internal sealed class NoListenerServer : IServer
 
 public sealed record AutomaticModeRequest(bool Enabled);
 
+public sealed record DimmingRequest(bool Enabled);
+
 public sealed record AddStationsRequest(string[] Addresses);
 
 public sealed record TriggerList(string[] Processes);
@@ -241,6 +252,7 @@ public sealed class CamelCaseEnumConverter<TEnum>() : JsonStringEnumConverter<TE
 [JsonSerializable(typeof(StationInfo[]))]
 [JsonSerializable(typeof(CommandResult))]
 [JsonSerializable(typeof(AutomaticModeRequest))]
+[JsonSerializable(typeof(DimmingRequest))]
 [JsonSerializable(typeof(AddStationsRequest))]
 [JsonSerializable(typeof(TriggerList))]
 [JsonSerializable(typeof(ApiError))]

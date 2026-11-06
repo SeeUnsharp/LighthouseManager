@@ -28,6 +28,9 @@ public sealed class StationController
     private CancellationTokenSource? _automaticCts;
     private bool _automaticMode;
     private string? _activeTrigger;
+    private bool _dimDisplays;
+    private bool _dimmed;
+    private string? _vrGame;
 
     public StationController(ILogger<StationController> logger, IOptions<AppSettings> settings,
         BaseStationManager manager, IHostApplicationLifetime lifetime)
@@ -39,6 +42,7 @@ public sealed class StationController
         _stations = addresses.ToDictionary(a => a, a => new StationInfo(MacAddress.Format(a)));
         _triggerProcesses = settings.Value.GetTriggerProcesses();
         _automaticMode = settings.Value.AutomaticMode;
+        _dimDisplays = settings.Value.DimDisplaysInVr;
 
         // Kestrel waits for open requests when stopping: end the live streams (/api/events), otherwise every stop
         // with the tray app connected took the 30 s shutdown timeout
@@ -81,6 +85,49 @@ public sealed class StationController
             UserSettings.Save("AutomaticMode", value);
             Publish();
         }
+    }
+
+    /// <summary>
+    ///     Linux only so far (Monado + KDE Plasma), see <see cref="Dimming.DisplayDimmer" />.
+    /// </summary>
+    public static bool DimmingSupported => OperatingSystem.IsLinux();
+
+    /// <summary>
+    ///     Dim the desktop displays while a VR game is shown, done by <see cref="Dimming.DisplayDimmer" />.
+    /// </summary>
+    public bool DimDisplaysInVr
+    {
+        get
+        {
+            lock (_sync) return _dimDisplays;
+        }
+        set
+        {
+            lock (_sync)
+            {
+                if (_dimDisplays == value) return;
+                _dimDisplays = value;
+            }
+
+            _logger.LogInformation("Dimming displays during VR {State}", value ? "enabled" : "disabled");
+            UserSettings.Save("DimDisplaysInVr", value);
+            Publish();
+        }
+    }
+
+    /// <summary>
+    ///     Reported by <see cref="Dimming.DisplayDimmer" />.
+    /// </summary>
+    public void SetDimmingState(bool dimmed, string? game)
+    {
+        lock (_sync)
+        {
+            if (_dimmed == dimmed && _vrGame == game) return;
+            _dimmed = dimmed;
+            _vrGame = game;
+        }
+
+        Publish();
     }
 
     /// <summary>
@@ -293,7 +340,8 @@ public sealed class StationController
         lock (_sync)
         {
             return new StatusSnapshot(_automaticMode, _activeTrigger != null, _activeTrigger,
-                _triggerProcesses.ToArray(), _stations.Values.ToArray(), AppPaths.UserSettingsFile, AppPaths.Version);
+                _triggerProcesses.ToArray(), _stations.Values.ToArray(), AppPaths.UserSettingsFile, AppPaths.Version,
+                new DimmingStatus(DimmingSupported, _dimDisplays, _dimmed, _vrGame));
         }
     }
 
@@ -468,4 +516,11 @@ public sealed record StatusSnapshot(
     string[] TriggerProcesses,
     StationInfo[] Stations,
     string SettingsFile,
-    string Version);
+    string Version,
+    DimmingStatus Dimming);
+
+/// <param name="Supported">Whether this platform can dim the displays (Linux with Monado and KDE Plasma for now).</param>
+/// <param name="Enabled">Dim the displays while a VR game is shown (AppSettings:DimDisplaysInVr).</param>
+/// <param name="Dimmed">The displays are dimmed right now.</param>
+/// <param name="Game">The VR game being shown, if any.</param>
+public sealed record DimmingStatus(bool Supported, bool Enabled, bool Dimmed, string? Game);
