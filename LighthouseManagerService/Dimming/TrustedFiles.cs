@@ -1,3 +1,4 @@
+#if !WINDOWS
 using System.Runtime.InteropServices;
 
 namespace LighthouseManagerService.Dimming;
@@ -11,11 +12,14 @@ internal static unsafe class TrustedFiles
     private const int AtFdCwd = -100;
     private const uint StatxMode = 0x2;
     private const uint StatxUid = 0x8;
+    private const uint StatxGid = 0x10;
 
-    /// <summary>
-    ///     S_IWGRP | S_IWOTH (octal 022).
-    /// </summary>
-    private const uint GroupOrOtherWritable = 0b000_010_010;
+    // S_IWOTH and S_IWGRP
+    private const uint OtherWritable = 0b000_000_010;
+    private const uint GroupWritable = 0b000_010_000;
+
+    private static readonly Lazy<uint?> PrivateGroup = new(() => FindPrivateGroup(geteuid(), getegid(),
+        ReadLines("/etc/passwd"), ReadLines("/etc/group")));
 
     public static uint CurrentUid => geteuid();
 
@@ -37,26 +41,41 @@ internal static unsafe class TrustedFiles
     }
 
     /// <summary>
-    ///     Whether the file (and the target of its symbolic links) and every directory above it belong to this user or
-    ///     root and aren't writable by others, so no other user can have placed or replaced it.
+    ///     Whether the file and every directory above it belong to this user or root and can't be changed by other
+    ///     users. Checked along the path as given and along the fully resolved one (symbolic links anywhere in it),
+    ///     so neither the links nor their targets can be swapped by someone else.
     /// </summary>
     public static bool IsTrustedPath(string path)
     {
-        try
-        {
-            var full = Path.GetFullPath(path);
-            var target = File.ResolveLinkTarget(full, true)?.FullName ?? full;
-            return IsTrustedChain(full) && IsTrustedChain(target);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
+        var full = Path.GetFullPath(path);
+        return RealPath(full) is { } real && IsTrustedChain(full) && IsTrustedChain(real);
     }
 
-    internal static bool IsTrusted(uint owner, uint mode, uint currentUid)
+    /// <param name="privateGroup">This user's private group (see <see cref="FindPrivateGroup" />), if any.</param>
+    internal static bool IsTrusted(uint owner, uint group, uint mode, uint currentUid, uint? privateGroup)
     {
-        return (owner == currentUid || owner == 0) && (mode & GroupOrOtherWritable) == 0;
+        return (owner == currentUid || owner == 0) && (mode & OtherWritable) == 0 &&
+               ((mode & GroupWritable) == 0 || group == privateGroup);
+    }
+
+    /// <summary>
+    ///     The user's own group on distributions with user private groups (Debian, Ubuntu, Fedora, ...: umask 002, so
+    ///     the user's files are group-writable): a group nobody else is in, neither as primary group nor as member.
+    /// </summary>
+    /// <returns>Its id, or null if the primary group is shared or unknown.</returns>
+    internal static uint? FindPrivateGroup(uint uid, uint gid, IEnumerable<string> passwd, IEnumerable<string> groups)
+    {
+        if (gid == 0) return null;
+        string? user = null;
+        foreach (var fields in passwd.Select(l => l.Split(':')).Where(f => f.Length >= 4))
+        {
+            if (fields[2] == uid.ToString()) user = fields[0];
+            else if (fields[3] == gid.ToString()) return null;
+        }
+
+        var group = groups.Select(l => l.Split(':')).FirstOrDefault(f => f.Length >= 4 && f[2] == gid.ToString());
+        if (user == null || group == null) return null;
+        return group[3].Split(',', StringSplitOptions.RemoveEmptyEntries).All(m => m == user) ? gid : null;
     }
 
     private static bool IsTrustedChain(string path)
@@ -64,30 +83,71 @@ internal static unsafe class TrustedFiles
         var uid = CurrentUid;
         for (var current = path; current != null; current = Path.GetDirectoryName(current))
         {
-            if (!TryStat(current, out var owner, out var mode) || !IsTrusted(owner, mode, uid)) return false;
+            if (!TryStat(current, out var owner, out var group, out var mode) ||
+                !IsTrusted(owner, group, mode, uid, PrivateGroup.Value))
+                return false;
         }
 
         return true;
     }
 
-    private static bool TryStat(string path, out uint owner, out uint mode)
+    private static bool TryStat(string path, out uint owner, out uint group, out uint mode)
     {
-        // struct statx has the same layout on every architecture (unlike struct stat): stx_uid at 20, stx_mode at 28
+        // struct statx has the same layout on every architecture (unlike struct stat): stx_uid at 20, stx_gid at 24,
+        // stx_mode at 28
         var buffer = stackalloc byte[256];
-        if (statx(AtFdCwd, path, 0, StatxMode | StatxUid, buffer) != 0)
+        if (statx(AtFdCwd, path, 0, StatxMode | StatxUid | StatxGid, buffer) != 0)
         {
-            owner = mode = 0;
+            owner = group = mode = 0;
             return false;
         }
 
         owner = *(uint*)(buffer + 20);
+        group = *(uint*)(buffer + 24);
         mode = *(ushort*)(buffer + 28);
         return true;
+    }
+
+    /// <returns>The path without symbolic links, "." or "..", or null if it doesn't exist.</returns>
+    private static string? RealPath(string path)
+    {
+        var resolved = realpath(path, IntPtr.Zero);
+        if (resolved == IntPtr.Zero) return null;
+        try
+        {
+            return Marshal.PtrToStringUTF8(resolved);
+        }
+        finally
+        {
+            free(resolved);
+        }
+    }
+
+    private static IEnumerable<string> ReadLines(string file)
+    {
+        try
+        {
+            return File.ReadAllLines(file);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
     }
 
     [DllImport("libc")]
     private static extern uint geteuid();
 
     [DllImport("libc")]
+    private static extern uint getegid();
+
+    [DllImport("libc")]
     private static extern int statx(int dirfd, string path, int flags, uint mask, byte* buffer);
+
+    [DllImport("libc")]
+    private static extern IntPtr realpath(string path, IntPtr resolved);
+
+    [DllImport("libc")]
+    private static extern void free(IntPtr pointer);
 }
+#endif

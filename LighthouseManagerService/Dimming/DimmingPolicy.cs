@@ -15,6 +15,12 @@ public sealed class DimmingPolicy(TimeSpan restoreDelay, TimeSpan retryDelay, bo
     private DateTime? _noGameSince;
     private DateTime _retryAt = DateTime.MinValue;
 
+    // A dim failed after changing some displays: dimmed for restoring, but dimming isn't finished
+    private bool _incomplete;
+
+    /// <summary>
+    ///     Whether displays are (or may be) dimmed and need restoring.
+    /// </summary>
     public bool Dimmed { get; private set; } = dimmed;
 
     /// <returns>true to dim, false to restore, null for nothing to do.</returns>
@@ -25,7 +31,7 @@ public sealed class DimmingPolicy(TimeSpan restoreDelay, TimeSpan retryDelay, bo
         if (enabled && gameShown)
         {
             _noGameSince = null;
-            return Dimmed ? null : true;
+            return Dimmed && !_incomplete ? null : true;
         }
 
         if (!Dimmed) return null;
@@ -42,14 +48,22 @@ public sealed class DimmingPolicy(TimeSpan restoreDelay, TimeSpan retryDelay, bo
     public void Applied(bool dimmed)
     {
         Dimmed = dimmed;
+        _incomplete = false;
         _noGameSince = null;
     }
 
     /// <summary>
     ///     The change returned by <see cref="Next" /> failed: try again after the retry delay.
     /// </summary>
-    public void Failed(DateTime now)
+    /// <param name="partlyDimmed">
+    ///     A dim failed after it may have changed displays: they're restored like dimmed ones once the game ends, and
+    ///     dimming is tried again while it runs.
+    /// </param>
+    public void Failed(DateTime now, bool partlyDimmed = false)
     {
         _retryAt = now + retryDelay;
+        if (!partlyDimmed) return;
+        Dimmed = true;
+        _incomplete = true;
     }
 }

@@ -30,8 +30,8 @@ public static class Api
 
         api.MapPut("/dimming", (DimmingRequest request, StationController c) =>
         {
-            if (!StationController.DimmingSupported)
-                return TypedResults.Json(new ApiError("Dimming displays is not supported on this platform yet"),
+            if (!c.DimmingSupported)
+                return TypedResults.Json(new ApiError("Dimming displays needs Linux with KDE Plasma 6.1 or newer"),
                     ApiJsonContext.Default.ApiError, statusCode: StatusCodes.Status400BadRequest);
             c.DimDisplaysInVr = request.Enabled;
             return Results.Ok(c.GetSnapshot());

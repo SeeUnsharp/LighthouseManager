@@ -75,7 +75,7 @@ for a few seconds fixed it).
 | `stations` | All configured stations, in configuration order (empty until base stations are configured) |
 | `settingsFile` | The user settings file to add base stations to (restart the service afterwards) |
 | `version` | Version of the service |
-| `dimming` | [Dimming displays during VR](#dimming-displays-during-vr): `supported` (this platform can do it), `enabled`, `dimmed` (right now), `game` (the VR game being shown, or `null`) |
+| `dimming` | [Dimming displays during VR](#dimming-displays-during-vr): `supported` (the brightness can be changed here: Linux with KDE Plasma 6.1+ running; checked every 30 s), `enabled`, `dimmed` (right now), `game` (the VR game being shown, or `null`) |
 
 ## Endpoints
 

@@ -29,6 +29,7 @@ public sealed class StationController
     private bool _automaticMode;
     private string? _activeTrigger;
     private bool _dimDisplays;
+    private bool _dimmingSupported;
     private bool _dimmed;
     private string? _vrGame;
 
@@ -88,9 +89,26 @@ public sealed class StationController
     }
 
     /// <summary>
-    ///     Linux only so far (Monado + KDE Plasma), see <see cref="Dimming.DisplayDimmer" />.
+    ///     Whether the displays can be dimmed here (Linux with KDE Plasma so far), reported by
+    ///     <see cref="Dimming.DisplayDimmer" />.
     /// </summary>
-    public static bool DimmingSupported => OperatingSystem.IsLinux();
+    public bool DimmingSupported
+    {
+        get
+        {
+            lock (_sync) return _dimmingSupported;
+        }
+        set
+        {
+            lock (_sync)
+            {
+                if (_dimmingSupported == value) return;
+                _dimmingSupported = value;
+            }
+
+            Publish();
+        }
+    }
 
     /// <summary>
     ///     Dim the desktop displays while a VR game is shown, done by <see cref="Dimming.DisplayDimmer" />.
@@ -341,7 +359,7 @@ public sealed class StationController
         {
             return new StatusSnapshot(_automaticMode, _activeTrigger != null, _activeTrigger,
                 _triggerProcesses.ToArray(), _stations.Values.ToArray(), AppPaths.UserSettingsFile, AppPaths.Version,
-                new DimmingStatus(DimmingSupported, _dimDisplays, _dimmed, _vrGame));
+                new DimmingStatus(_dimmingSupported, _dimDisplays, _dimmed, _vrGame));
         }
     }
 
@@ -519,7 +537,7 @@ public sealed record StatusSnapshot(
     string Version,
     DimmingStatus Dimming);
 
-/// <param name="Supported">Whether this platform can dim the displays (Linux with Monado and KDE Plasma for now).</param>
+/// <param name="Supported">Whether the displays can be dimmed here (Linux with KDE Plasma 6.1+ running, for now).</param>
 /// <param name="Enabled">Dim the displays while a VR game is shown (AppSettings:DimDisplaysInVr).</param>
 /// <param name="Dimmed">The displays are dimmed right now.</param>
 /// <param name="Game">The VR game being shown, if any.</param>

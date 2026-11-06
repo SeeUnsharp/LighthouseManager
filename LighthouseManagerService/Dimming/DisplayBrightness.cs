@@ -13,6 +13,11 @@ public sealed record DisplayBrightness(string Name, string Label, int Brightness
 /// </summary>
 public interface IDisplayBrightnessControl
 {
+    /// <summary>
+    ///     Whether brightness control is available right now (e.g. the desktop's service runs).
+    /// </summary>
+    Task<bool> IsAvailableAsync(CancellationToken ct);
+
     Task<IReadOnlyList<DisplayBrightness>> GetDisplaysAsync(CancellationToken ct);
     Task SetBrightnessAsync(string name, int brightness, CancellationToken ct);
 }
@@ -52,6 +57,8 @@ public static class DimmingPlan
             if (display.Brightness > DimmedBrightness) changes.Add((display.Name, DimmedBrightness));
         }
 
+        // Saved before but not listed right now (e.g. DDC/CI not answering): its original brightness must not get lost
+        newSaved.AddRange(saved.Where(s => !displays.Any(d => Matches(s, d))));
         return (newSaved, changes);
     }
 
@@ -59,15 +66,21 @@ public static class DimmingPlan
     ///     Restores displays that are still dimmed. A display whose brightness was changed meanwhile (by the user) is
     ///     left alone, as is one that's gone or was replaced.
     /// </summary>
+    /// <param name="interrupted">
+    ///     Displays whose restore was interrupted (failed write): restored although they're between dimmed and original
+    ///     brightness, which otherwise looks changed by the user.
+    /// </param>
     public static IReadOnlyList<(string Name, int Brightness)> Restore(IReadOnlyList<DisplayBrightness> displays,
-        IReadOnlyList<DimmedDisplay> saved)
+        IReadOnlyList<DimmedDisplay> saved, IReadOnlySet<string>? interrupted = null)
     {
         var changes = new List<(string, int)>();
         foreach (var dimmed in saved)
         {
             var display = displays.FirstOrDefault(d => Matches(dimmed, d));
+            if (display == null) continue;
             // 1 % tolerance: the value read back can be rounded to the monitor's own (DDC/CI) scale
-            if (display != null && display.Brightness <= dimmed.DimmedTo + display.MaxBrightness / 100)
+            if (display.Brightness <= dimmed.DimmedTo + display.MaxBrightness / 100 ||
+                interrupted?.Contains(display.Name) == true)
                 changes.Add((display.Name, dimmed.Brightness));
         }
 

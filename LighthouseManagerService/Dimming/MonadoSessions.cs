@@ -1,3 +1,4 @@
+#if !WINDOWS
 using System.Runtime.InteropServices;
 using LighthouseManager.Core;
 
@@ -19,6 +20,13 @@ public sealed unsafe class MonadoSessions(ILogger logger) : IVrSessionSource
     private const uint SupportedMajorVersion = 1;
     private static readonly string[] ServiceProcesses = ["monado-service", "wivrn-server"];
 
+    /// <summary>
+    ///     How often to look for the VR runtime while not connected.
+    /// </summary>
+    private static readonly TimeSpan ConnectInterval = TimeSpan.FromSeconds(5);
+
+    private DateTime _nextConnect = DateTime.MinValue;
+    private IReadOnlyList<VrClient>? _lastClients;
     private string? _libraryPath;
     private IntPtr _library;
     private IntPtr _root;
@@ -36,37 +44,61 @@ public sealed unsafe class MonadoSessions(ILogger logger) : IVrSessionSource
 
     public IReadOnlyList<VrClient>? GetClients()
     {
-        // While connected, the processes aren't searched: a stopped (or restarted) service fails the update below
-        if (_root == IntPtr.Zero && !TryConnect()) return null;
+        if (_root == IntPtr.Zero)
+        {
+            // While connected, the processes aren't searched: a stopped (or restarted) service fails the update
+            // below. While not, only now and then: usually no VR runtime runs at all.
+            var now = DateTime.UtcNow;
+            if (now < _nextConnect) return null;
+            _nextConnect = now + ConnectInterval;
+            if (!TryConnect()) return null;
+        }
 
         if (_updateClientList(_root) != Success)
         {
-            // Service gone or restarted: connect again next time
+            // Service gone or restarted: connect again
             DestroyRoot();
+            _lastClients = null;
+            _nextConnect = DateTime.MinValue;
             return null;
         }
 
+        // The list is a local copy from the update above, so reading it only fails on errors. Those don't mean the
+        // game ended: answer with the last list and connect again.
         uint count;
-        if (_getNumberClients(_root, &count) != Success) return null;
+        if (_getNumberClients(_root, &count) != Success) return ReadFailed();
         var clients = new List<VrClient>((int)count);
         for (uint i = 0; i < count; i++)
         {
             uint id, flags;
             IntPtr name;
             if (_getClientIdAtIndex(_root, i, &id) != Success || _getClientState(_root, id, &flags) != Success)
-                continue;
+                return ReadFailed();
             var clientName = _getClientName(_root, id, &name) == Success
                 ? Marshal.PtrToStringUTF8(name) ?? ""
                 : "";
             clients.Add(new VrClient(clientName, (MonadoClientFlags)flags));
         }
 
-        return clients;
+        return _lastClients = clients;
+    }
+
+    public void Disconnect()
+    {
+        Unload();
+        _nextConnect = DateTime.MinValue;
     }
 
     public void Dispose()
     {
-        Disconnect();
+        Unload();
+    }
+
+    private IReadOnlyList<VrClient>? ReadFailed()
+    {
+        DestroyRoot();
+        _nextConnect = DateTime.MinValue;
+        return _lastClients;
     }
 
     private bool TryConnect()
@@ -85,13 +117,13 @@ public sealed unsafe class MonadoSessions(ILogger logger) : IVrSessionSource
             }
 
             _missingReported = service != null;
-            Disconnect();
+            Unload();
             return false;
         }
 
         if (path != _libraryPath)
         {
-            Disconnect();
+            Unload();
             _libraryPath = path;
             _unusable = !TryLoad(path);
         }
@@ -219,12 +251,14 @@ public sealed unsafe class MonadoSessions(ILogger logger) : IVrSessionSource
         logger.LogInformation("Disconnected from the VR runtime");
     }
 
-    public void Disconnect()
+    private void Unload()
     {
         DestroyRoot();
+        _lastClients = null;
         if (_library != IntPtr.Zero) NativeLibrary.Free(_library);
         _library = IntPtr.Zero;
         _libraryPath = null;
         _unusable = false;
     }
 }
+#endif

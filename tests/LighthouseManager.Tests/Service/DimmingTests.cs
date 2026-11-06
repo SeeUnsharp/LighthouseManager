@@ -95,6 +95,36 @@ public class DimmingPolicyTests
     }
 
     [Fact]
+    public void Partly_failed_dim_is_retried_and_restored_when_the_game_ends()
+    {
+        var policy = new DimmingPolicy(RestoreDelay, RetryDelay);
+        Assert.True(policy.Next(true, true, _start));
+        // Some displays were changed before the error
+        policy.Failed(_start, partlyDimmed: true);
+        Assert.True(policy.Dimmed);
+
+        // Still running: dim again after the retry delay
+        Assert.Null(policy.Next(true, true, _start.AddSeconds(29)));
+        Assert.True(policy.Next(true, true, _start.AddSeconds(30)));
+        policy.Failed(_start.AddSeconds(30), partlyDimmed: true);
+
+        // Game ended before it worked: restore what was dimmed
+        Assert.Null(policy.Next(true, false, _start.AddSeconds(60)));
+        Assert.False(policy.Next(true, false, _start.AddSeconds(70)));
+    }
+
+    [Fact]
+    public void Failed_dim_without_changes_needs_no_restore()
+    {
+        var policy = new DimmingPolicy(RestoreDelay, RetryDelay);
+        Assert.True(policy.Next(true, true, _start));
+        policy.Failed(_start);
+
+        Assert.False(policy.Dimmed);
+        Assert.Null(policy.Next(true, false, _start.AddMinutes(5)));
+    }
+
+    [Fact]
     public void Failure_waits_for_the_retry_delay()
     {
         var policy = new DimmingPolicy(RestoreDelay, RetryDelay);
@@ -139,6 +169,27 @@ public class DimmingPlanTests
 
         Assert.Equal([previous], saved);
         Assert.Empty(changes);
+    }
+
+    [Fact]
+    public void Dim_keeps_saved_displays_that_are_missing_right_now()
+    {
+        // A first attempt saved display1, which doesn't answer on the retry
+        var laptop = new DimmedDisplay("display1", "Built-in", 70, 0);
+        var (saved, _) = DimmingPlan.Dim([Monitor], [laptop]);
+
+        Assert.Equal([new DimmedDisplay("display0", "LC49G95T", 3000, 0), laptop], saved);
+    }
+
+    [Fact]
+    public void Restore_finishes_an_interrupted_restore()
+    {
+        // A failed write left display0 halfway, which otherwise looks changed by the user
+        var saved = new[] { new DimmedDisplay("display0", "LC49G95T", 3000, 0) };
+        var halfway = Monitor with { Brightness = 1500 };
+
+        Assert.Empty(DimmingPlan.Restore([halfway], saved));
+        Assert.Equal([("display0", 3000)], DimmingPlan.Restore([halfway], saved, new HashSet<string> { "display0" }));
     }
 
     [Fact]

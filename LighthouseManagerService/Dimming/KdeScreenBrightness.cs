@@ -17,6 +17,22 @@ public sealed class KdeScreenBrightness : IDisplayBrightnessControl
     /// </summary>
     private const uint SuppressIndicator = 0x1;
 
+    /// <summary>
+    ///     Only KDE Plasma (powerdevil) provides the service; other desktops, or Plasma before 6.1, don't.
+    /// </summary>
+    public async Task<bool> IsAvailableAsync(CancellationToken ct)
+    {
+        try
+        {
+            return await Connection.Session.IsServiceActiveAsync(Service).WaitAsync(ct);
+        }
+        catch (Exception ex) when (ex is DBusException or ConnectException or InvalidOperationException)
+        {
+            // No session bus (e.g. not started from a desktop session)
+            return false;
+        }
+    }
+
     public async Task<IReadOnlyList<DisplayBrightness>> GetDisplaysAsync(CancellationToken ct)
     {
         var root = Connection.Session.CreateProxy<IScreenBrightness>(Service, RootPath);

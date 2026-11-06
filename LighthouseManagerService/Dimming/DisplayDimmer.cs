@@ -17,7 +17,15 @@ public class DisplayDimmer(ILogger<DisplayDimmer> logger, IOptions<AppSettings> 
     private static readonly TimeSpan Transition = TimeSpan.FromSeconds(1.5);
     private static readonly TimeSpan TransitionStep = TimeSpan.FromMilliseconds(50);
 
+    /// <summary>
+    ///     How often to check whether brightness control is available (e.g. Plasma started after the service).
+    /// </summary>
+    private static readonly TimeSpan AvailabilityInterval = TimeSpan.FromSeconds(30);
+
     private readonly DimmedDisplayStore _store = DimmedDisplayStore.Default;
+
+    // Displays whose restore was interrupted, see DimmingPlan.Restore
+    private readonly HashSet<string> _interrupted = [];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -32,15 +40,27 @@ public class DisplayDimmer(ILogger<DisplayDimmer> logger, IOptions<AppSettings> 
         // Left dimmed by a previous run (crash, reboot): restored once no game is shown
         var policy = new DimmingPolicy(RestoreDelay, RetryDelay, _store.Exists);
         var enabled = false;
+        var available = false;
+        var availabilityCheckedAt = DateTime.MinValue;
+        var failureLogged = false;
         string? shownGame = null;
         try
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                // Can be switched at runtime through the API
-                if (controller.DimDisplaysInVr != enabled)
+                var now = DateTime.UtcNow;
+                if (now - availabilityCheckedAt >= AvailabilityInterval)
                 {
-                    enabled = !enabled;
+                    availabilityCheckedAt = now;
+                    available = await displays.IsAvailableAsync(stoppingToken);
+                    controller.DimmingSupported = available;
+                }
+
+                // Can be switched at runtime through the API; nothing to do where brightness can't be changed
+                var active = controller.DimDisplaysInVr && available;
+                if (active != enabled)
+                {
+                    enabled = active;
                     if (enabled) logger.LogInformation("Dimming displays while a VR game is shown (Monado, KDE Plasma)");
                     // Not connected to the VR runtime while turned off
                     else sessions.Disconnect();
@@ -54,19 +74,26 @@ public class DisplayDimmer(ILogger<DisplayDimmer> logger, IOptions<AppSettings> 
                     shownGame = game;
                 }
 
-                var now = DateTime.UtcNow;
                 if (policy.Next(enabled, game != null, now) is { } dim)
                 {
                     try
                     {
                         await (dim ? DimAsync(displays, stoppingToken) : RestoreAsync(displays, stoppingToken));
                         policy.Applied(dim);
+                        failureLogged = false;
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
-                        logger.LogError(ex, "Couldn't {Action} the displays, trying again in {Delay}s",
-                            dim ? "dim" : "restore", RetryDelay.TotalSeconds);
-                        policy.Failed(now);
+                        // Full details once; a lasting problem would otherwise fill the log every retry
+                        if (!failureLogged)
+                            logger.LogError(ex, "Couldn't {Action} the displays, trying again every {Delay}s",
+                                dim ? "dim" : "restore", RetryDelay.TotalSeconds);
+                        else
+                            logger.LogDebug("Couldn't {Action} the displays again: {Message}", dim ? "dim" : "restore",
+                                ex.Message);
+                        failureLogged = true;
+                        // Saved before changing anything: some displays may be dimmed already and must be restored
+                        policy.Failed(now, partlyDimmed: dim && _store.Exists);
                     }
                 }
 
@@ -111,8 +138,11 @@ public class DisplayDimmer(ILogger<DisplayDimmer> logger, IOptions<AppSettings> 
     {
         var saved = _store.Load();
         var displays = await control.GetDisplaysAsync(ct);
-        var changes = DimmingPlan.Restore(displays, saved);
+        var changes = DimmingPlan.Restore(displays, saved, _interrupted);
+        // Until done: a failed write leaves a display between dimmed and original brightness
+        _interrupted.UnionWith(changes.Select(c => c.Name));
         await TransitionAsync(control, displays, changes, ct);
+        _interrupted.Clear();
         _store.Delete();
         if (changes.Count < saved.Count)
             logger.LogInformation("Restored {Count} of {Total} display(s), the others were changed meanwhile or are gone",
@@ -142,12 +172,12 @@ public class DisplayDimmer(ILogger<DisplayDimmer> logger, IOptions<AppSettings> 
                 await Task.Delay(TransitionStep, ct);
             }
         }
-        catch (OperationCanceledException)
+        catch (Exception)
         {
-            // Finished right away below
+            // Cancelled or a failed step: the end values are set right away below
         }
 
-        // Also when cancelled: a display left halfway would look changed by the user and not be restored later
+        // Also then: a display left halfway would look changed by the user and not be restored later
         using var timeout = ct.IsCancellationRequested ? new CancellationTokenSource(ShutdownTimeout) : null;
         foreach (var (name, brightness) in changes)
             await control.SetBrightnessAsync(name, brightness, timeout?.Token ?? ct);
