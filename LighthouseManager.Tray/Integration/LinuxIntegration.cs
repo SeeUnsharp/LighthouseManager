@@ -45,7 +45,12 @@ internal static class LinuxIntegration
             hidden: File.Exists(AutostartFile) && !IsTrayAutostartEnabled()));
 
         // Type=exec, not notify: the AppImage entry point forwards to the service binary, and .NET only sends the
-        // readiness notification when its parent process is systemd
+        // readiness notification when its parent process is systemd.
+        // KillMode=mixed: SIGTERM only to the forwarder, which passes it to the service and waits for it. With the
+        // default, the AppImage runtime gets SIGTERM too and unmounts the image while both still run from it (the
+        // forwarder crashed with SIGBUS, the service was killed without shutting down).
+        // SendSIGKILL=no: mixed would SIGKILL the runtime right after the forwarder exits, leaving a broken mount in
+        // /tmp; it unmounts and exits by itself. A hanging service still ends after the .NET shutdown timeout.
         var unit = $"""
             [Unit]
             Description=LighthouseManager - wakes and sleeps Lighthouse base stations
@@ -54,6 +59,8 @@ internal static class LinuxIntegration
             [Service]
             Type=exec
             ExecStart={exec} --service
+            KillMode=mixed
+            SendSIGKILL=no
             Restart=on-failure
 
             [Install]
