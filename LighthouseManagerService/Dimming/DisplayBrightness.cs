@@ -120,10 +120,8 @@ public sealed class DimmedDisplayStore(string file)
 
     public void Save(IReadOnlyList<DimmedDisplay> displays)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        var temp = file + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(displays.ToList(), DimmingJsonContext.Default.ListDimmedDisplay));
-        File.Move(temp, file, true);
+        AtomicFile.WriteAllText(file,
+            JsonSerializer.Serialize(displays.ToList(), DimmingJsonContext.Default.ListDimmedDisplay));
     }
 
     public void Delete()

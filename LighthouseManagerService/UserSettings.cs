@@ -88,10 +88,7 @@ internal static class UserSettings
             text = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine;
         }
 
-        // Write a temporary file first, so a crash can't leave a half written settings file
-        var temp = file + ".tmp";
-        File.WriteAllText(temp, text);
-        File.Move(temp, file, true);
+        AtomicFile.WriteAllText(file, text);
     }
 
     public static void AddTo(ConfigurationManager configuration)
