@@ -33,7 +33,11 @@ public static class Api
             if (!c.DimmingSupported)
                 return TypedResults.Json(new ApiError("Dimming displays needs Linux with KDE Plasma 6.1 or newer"),
                     ApiJsonContext.Default.ApiError, statusCode: StatusCodes.Status400BadRequest);
+            if (request.FadeSeconds is { } fade && !StationController.IsValidFade(fade))
+                return TypedResults.Json(new ApiError("fadeSeconds must be between 0 and 10"),
+                    ApiJsonContext.Default.ApiError, statusCode: StatusCodes.Status400BadRequest);
             c.DimDisplaysInVr = request.Enabled;
+            if (request.FadeSeconds is { } seconds) c.DimFadeSeconds = seconds;
             return Results.Ok(c.GetSnapshot());
         });
 
@@ -196,7 +200,8 @@ internal sealed class NoListenerServer : IServer
 
 public sealed record AutomaticModeRequest(bool Enabled);
 
-public sealed record DimmingRequest(bool Enabled);
+/// <param name="FadeSeconds">0 to 10; null keeps the current value.</param>
+public sealed record DimmingRequest(bool Enabled, double? FadeSeconds = null);
 
 public sealed record AddStationsRequest(string[] Addresses);
 

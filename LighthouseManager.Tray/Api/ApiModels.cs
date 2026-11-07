@@ -35,13 +35,14 @@ public sealed record StatusSnapshot(
     string? Version = null,
     DimmingStatus? Dimming = null);
 
-public sealed record DimmingStatus(bool Supported, bool Enabled, bool Dimmed, string? Game);
+public sealed record DimmingStatus(bool Supported, bool Enabled, bool Dimmed, string? Game, double FadeSeconds = 1.5);
 
 public sealed record CommandResult(bool Success, StatusSnapshot Status);
 
 public sealed record AutomaticModeRequest(bool Enabled);
 
-public sealed record DimmingRequest(bool Enabled);
+/// <param name="FadeSeconds">null keeps the current value.</param>
+public sealed record DimmingRequest(bool Enabled, double? FadeSeconds = null);
 
 public sealed record AddStationsRequest(string[] Addresses);
 

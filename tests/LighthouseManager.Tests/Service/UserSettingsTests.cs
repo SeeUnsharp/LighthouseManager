@@ -110,4 +110,38 @@ public sealed class UserSettingsTests : IDisposable
         Assert.Equal([0xAABBCCDDEE01UL], ReadBack());
         Assert.Contains("\"Interval\": 2000", System.IO.File.ReadAllText(File));
     }
+
+    [Fact]
+    public void Decimal_numbers_are_saved_invariant_and_replaced_again()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        Directory.CreateDirectory(Path.GetDirectoryName(File)!);
+        System.IO.File.WriteAllText(File, """
+            {
+              "AppSettings": {
+                "DimFadeSeconds": 1.5,
+                "Interval": 2000
+              }
+            }
+            """);
+        var culture = Thread.CurrentThread.CurrentCulture;
+        try
+        {
+            // "2,5" would be invalid JSON
+            Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+            UserSettings.Save("DimFadeSeconds", 2.5);
+            UserSettings.Save("DimFadeSeconds", 0.0);
+        }
+        finally
+        {
+            Thread.CurrentThread.CurrentCulture = culture;
+        }
+
+        var settings = new ConfigurationBuilder().AddJsonFile(File, optional: false).Build()
+            .GetSection("AppSettings").Get<AppSettings>()!;
+        Assert.Equal(0, settings.DimFadeSeconds);
+        Assert.Equal(2000, settings.Interval);
+        // Replaced, not added a second time
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(System.IO.File.ReadAllText(File), "DimFadeSeconds"));
+    }
 }

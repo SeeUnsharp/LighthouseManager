@@ -95,10 +95,11 @@ public sealed class ApiClient(Uri baseAddress) : IDisposable
         return (await response.Content.ReadFromJsonAsync(ApiJsonContext.Default.StatusSnapshot, cts.Token))!;
     }
 
-    public async Task<StatusSnapshot> SetDimmingAsync(bool enabled)
+    /// <param name="fadeSeconds">null keeps the current value.</param>
+    public async Task<StatusSnapshot> SetDimmingAsync(bool enabled, double? fadeSeconds = null)
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        using var response = await _http.PutAsJsonAsync("api/dimming", new DimmingRequest(enabled),
+        using var response = await _http.PutAsJsonAsync("api/dimming", new DimmingRequest(enabled, fadeSeconds),
             ApiJsonContext.Default.DimmingRequest, cts.Token);
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync(ApiJsonContext.Default.StatusSnapshot, cts.Token))!;

@@ -42,13 +42,15 @@ internal static class UserSettings
     /// <summary>
     ///     Writes one AppSettings entry to the user settings file, keeping comments and other settings.
     /// </summary>
-    /// <param name="value">string or bool</param>
+    /// <param name="value">string, bool or double</param>
     public static void Save(string key, object value)
     {
         var literal = value switch
         {
             bool b => b ? "true" : "false",
             string s => JsonSerializer.Serialize(s, UserSettingsJsonContext.Default.String),
+            // Invariant: "1.5", never "1,5" from a German locale
+            double d when double.IsFinite(d) => d.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
             _ => throw new ArgumentException($"Unsupported setting type {value.GetType()}", nameof(value))
         };
         var name = Regex.Escape(key);
@@ -57,7 +59,7 @@ internal static class UserSettings
         var text = File.Exists(file) ? File.ReadAllText(file) : Template;
 
         // An existing (not commented out) entry: replace its value
-        var existing = new Regex($"^(?<prefix>\\s*\"{name}\"\\s*:\\s*)(?:\"(?:[^\"\\\\]|\\\\.)*\"|true|false|-?\\d+)",
+        var existing = new Regex($"^(?<prefix>\\s*\"{name}\"\\s*:\\s*)(?:\"(?:[^\"\\\\]|\\\\.)*\"|true|false|-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)",
             RegexOptions.Multiline);
         // The commented out example of the template: becomes the entry (it's the last one of the section, so no
         // trailing comma is needed)

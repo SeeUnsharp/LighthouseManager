@@ -30,10 +30,19 @@ public sealed partial class MainViewModel : ObservableObject
     // Set from the API; changing it from the UI goes through SetAutomaticModeCommand
     [ObservableProperty] private bool _automaticMode;
 
-    // Same for dimming: SetDimDisplaysCommand
-    [ObservableProperty] private bool _dimDisplays;
-
     [ObservableProperty] private bool _dimmingSupported;
+
+    // Two-way with the slider (see DimmingSlider): changes are sent once it rests, see OnDimmingLevelChanged
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(DimmingText))]
+    private double _dimmingLevel;
+
+    private CancellationTokenSource? _dimmingSend;
+    private bool _applyingSnapshot;
+    private DimmingStatus? _lastDimming;
+
+    public int DimmingMaximum => DimmingSlider.Maximum;
+
+    public string DimmingText => DimmingSlider.Text((int)DimmingLevel);
 
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText))]
     private string? _triggerProcess;
@@ -447,20 +456,51 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <param name="enabled">The switch's new state, see <see cref="SetAutomaticMode" />.</param>
-    [RelayCommand]
-    private async Task SetDimDisplays(bool enabled)
+    partial void OnDimmingLevelChanged(double value)
     {
-        LastError = null;
+        if (_applyingSnapshot) return;
+        // Sent once the slider rests for a moment, not for every step while dragging
+        _dimmingSend?.Cancel();
+        _dimmingSend = new CancellationTokenSource();
+        _ = SendDimmingAsync((int)value, _dimmingSend);
+    }
+
+    private async Task SendDimmingAsync(int position, CancellationTokenSource send)
+    {
         try
         {
-            Apply(await _api.SetDimmingAsync(enabled));
+            await Task.Delay(TimeSpan.FromMilliseconds(400), send.Token);
+            LastError = null;
+            var (enabled, fadeSeconds) = DimmingSlider.ToRequest(position);
+            var snapshot = await _api.SetDimmingAsync(enabled, fadeSeconds);
+            // A newer value may be waiting meanwhile; then that one's answer counts
+            if (send.IsCancellationRequested) return;
+            _dimmingSend = null;
+            Apply(snapshot);
+        }
+        catch (OperationCanceledException) when (send.IsCancellationRequested)
+        {
+            // A newer value replaced it
         }
         catch (Exception ex)
         {
             LastError = ex.Message;
-            OnPropertyChanged(nameof(DimDisplays));
+            if (_dimmingSend != send) return;
+            _dimmingSend = null;
+            // Back to what the service has
+            if (_lastDimming is { } dimming) ApplyDimming(dimming);
         }
+        finally
+        {
+            send.Dispose();
+        }
+    }
+
+    private void ApplyDimming(DimmingStatus dimming)
+    {
+        _applyingSnapshot = true;
+        DimmingLevel = DimmingSlider.FromStatus(dimming.Enabled, dimming.FadeSeconds);
+        _applyingSnapshot = false;
     }
 
     private void Apply(StatusSnapshot snapshot)
@@ -469,7 +509,9 @@ public sealed partial class MainViewModel : ObservableObject
         AutomaticMode = snapshot.AutomaticMode;
         // Older services don't report it
         DimmingSupported = snapshot.Dimming?.Supported ?? false;
-        DimDisplays = snapshot.Dimming?.Enabled ?? false;
+        _lastDimming = snapshot.Dimming;
+        // Not while a slider change waits to be sent: the slider would jump back under the mouse
+        if (_dimmingSend == null && snapshot.Dimming is { } dimming) ApplyDimming(dimming);
         TriggerProcess = snapshot.TriggerProcess;
         SettingsFile = snapshot.SettingsFile;
         if (!TriggerProcesses.SequenceEqual(snapshot.TriggerProcesses)) TriggerProcesses = snapshot.TriggerProcesses;

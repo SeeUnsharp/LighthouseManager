@@ -17,7 +17,7 @@ public class ApiContractTests
         new Server.StationInfo("AA:BB:CC:DD:EE:02", null, LighthouseManager.Core.StationState.Booting, null, true,
             "Not reachable")
     ], "/home/user/.config/lighthousemanager/appsettings.json", "2.1.0",
-        new Server.DimmingStatus(true, true, true, "Beat Saber"));
+        new Server.DimmingStatus(true, true, true, "Beat Saber", 2.5));
 
     [Fact]
     public void Status_snapshot_round_trips_from_service_to_tray()
@@ -31,7 +31,7 @@ public class ApiContractTests
         Assert.Equal(["vrserver", "monado-service"], client.TriggerProcesses);
         Assert.Equal("/home/user/.config/lighthousemanager/appsettings.json", client.SettingsFile);
         Assert.Equal("2.1.0", client.Version);
-        Assert.Equal(new Client.DimmingStatus(true, true, true, "Beat Saber"), client.Dimming);
+        Assert.Equal(new Client.DimmingStatus(true, true, true, "Beat Saber", 2.5), client.Dimming);
         Assert.Collection(client.Stations,
             s =>
             {
@@ -64,15 +64,32 @@ public class ApiContractTests
         Assert.Contains("\"rawState\":11", json);
         Assert.Contains("\"settingsFile\":", json);
         Assert.Contains("\"version\":\"2.1.0\"", json);
-        Assert.Contains("\"dimming\":{\"supported\":true,\"enabled\":true,\"dimmed\":true,\"game\":\"Beat Saber\"}", json);
+        Assert.Contains(
+            "\"dimming\":{\"supported\":true,\"enabled\":true,\"dimmed\":true,\"game\":\"Beat Saber\",\"fadeSeconds\":2.5}",
+            json);
     }
 
     [Fact]
-    public void Dimming_request_round_trips()
+    public void Dimming_request_round_trips_with_and_without_fade()
     {
-        var json = JsonSerializer.Serialize(new Client.DimmingRequest(true), Client.ApiJsonContext.Default.DimmingRequest);
+        var json = JsonSerializer.Serialize(new Client.DimmingRequest(true, 0), Client.ApiJsonContext.Default.DimmingRequest);
+        var server = JsonSerializer.Deserialize(json, Server.ApiJsonContext.Default.DimmingRequest)!;
+        Assert.True(server.Enabled);
+        Assert.Equal(0, server.FadeSeconds);
 
-        Assert.True(JsonSerializer.Deserialize(json, Server.ApiJsonContext.Default.DimmingRequest)!.Enabled);
+        // Clients that only switch it on or off (older tray apps) keep the fade
+        Assert.Null(JsonSerializer.Deserialize("""{"enabled":false}""", Server.ApiJsonContext.Default.DimmingRequest)!
+            .FadeSeconds);
+    }
+
+    [Fact]
+    public void Older_services_without_fade_get_the_default()
+    {
+        var client = JsonSerializer.Deserialize(
+            """{"supported":true,"enabled":false,"dimmed":false,"game":null}""",
+            Client.ApiJsonContext.Default.DimmingStatus)!;
+
+        Assert.Equal(1.5, client.FadeSeconds);
     }
 
     [Fact]

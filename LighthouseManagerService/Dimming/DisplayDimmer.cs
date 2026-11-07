@@ -14,7 +14,6 @@ public class DisplayDimmer(ILogger<DisplayDimmer> logger, IOptions<AppSettings> 
     private static readonly TimeSpan RestoreDelay = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan Transition = TimeSpan.FromSeconds(1.5);
     private static readonly TimeSpan TransitionStep = TimeSpan.FromMilliseconds(50);
 
     /// <summary>
@@ -113,7 +112,8 @@ public class DisplayDimmer(ILogger<DisplayDimmer> logger, IOptions<AppSettings> 
                 using var timeout = new CancellationTokenSource(ShutdownTimeout);
                 try
                 {
-                    await RestoreAsync(displays, timeout.Token);
+                    // At once: logout or an update is waiting
+                    await RestoreAsync(displays, timeout.Token, fade: false);
                 }
                 catch (Exception ex)
                 {
@@ -130,18 +130,18 @@ public class DisplayDimmer(ILogger<DisplayDimmer> logger, IOptions<AppSettings> 
         var (saved, changes) = DimmingPlan.Dim(displays, _store.Load());
         // Saved first: the original brightness must survive a crash right after dimming
         _store.Save(saved);
-        await TransitionAsync(control, displays, changes, ct);
+        await TransitionAsync(control, displays, changes, Fade, ct);
         logger.LogInformation("Dimmed {Count} display(s)", changes.Count);
     }
 
-    private async Task RestoreAsync(IDisplayBrightnessControl control, CancellationToken ct)
+    private async Task RestoreAsync(IDisplayBrightnessControl control, CancellationToken ct, bool fade = true)
     {
         var saved = _store.Load();
         var displays = await control.GetDisplaysAsync(ct);
         var changes = DimmingPlan.Restore(displays, saved, _interrupted);
         // Until done: a failed write leaves a display between dimmed and original brightness
         _interrupted.UnionWith(changes.Select(c => c.Name));
-        await TransitionAsync(control, displays, changes, ct);
+        await TransitionAsync(control, displays, changes, fade ? Fade : TimeSpan.Zero, ct);
         _interrupted.Clear();
         _store.Delete();
         if (changes.Count < saved.Count)
@@ -151,21 +151,24 @@ public class DisplayDimmer(ILogger<DisplayDimmer> logger, IOptions<AppSettings> 
             logger.LogInformation("Restored {Count} display(s)", changes.Count);
     }
 
+    // Changeable at runtime (tray slider, API)
+    private TimeSpan Fade => TimeSpan.FromSeconds(controller.DimFadeSeconds);
+
     /// <summary>
-    ///     Changes the brightness gradually over <see cref="Transition" />, all displays together.
+    ///     Changes the brightness gradually over <paramref name="duration" /> (zero: at once), all displays together.
     /// </summary>
     private static async Task TransitionAsync(IDisplayBrightnessControl control,
         IReadOnlyList<DisplayBrightness> displays, IReadOnlyList<(string Name, int Brightness)> changes,
-        CancellationToken ct)
+        TimeSpan duration, CancellationToken ct)
     {
         var from = changes.Select(c => displays.First(d => d.Name == c.Name).Brightness).ToList();
         try
         {
             // By elapsed time, so slow writes (DDC/CI) make the steps coarser, not the transition longer
             var watch = Stopwatch.StartNew();
-            while (watch.Elapsed < Transition)
+            while (watch.Elapsed < duration)
             {
-                var progress = watch.Elapsed / Transition;
+                var progress = watch.Elapsed / duration;
                 for (var i = 0; i < changes.Count; i++)
                     await control.SetBrightnessAsync(changes[i].Name,
                         DimmingPlan.Interpolate(from[i], changes[i].Brightness, progress), ct);

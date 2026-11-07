@@ -30,6 +30,7 @@ public sealed class StationController
     private string? _activeTrigger;
     private bool _dimDisplays;
     private bool _dimmingSupported;
+    private double _dimFadeSeconds;
     private bool _dimmed;
     private string? _vrGame;
 
@@ -44,6 +45,7 @@ public sealed class StationController
         _triggerProcesses = settings.Value.GetTriggerProcesses();
         _automaticMode = settings.Value.AutomaticMode;
         _dimDisplays = settings.Value.DimDisplaysInVr;
+        _dimFadeSeconds = settings.Value.DimFadeSeconds;
 
         // Kestrel waits for open requests when stopping: end the live streams (/api/events), otherwise every stop
         // with the tray app connected took the 30 s shutdown timeout
@@ -129,6 +131,34 @@ public sealed class StationController
 
             _logger.LogInformation("Dimming displays during VR {State}", value ? "enabled" : "disabled");
             UserSettings.Save("DimDisplaysInVr", value);
+            Publish();
+        }
+    }
+
+    public const double MaxFadeSeconds = 10;
+
+    public static bool IsValidFade(double seconds) => seconds is >= 0 and <= MaxFadeSeconds;
+
+    /// <summary>
+    ///     How long dimming and restoring fade, in seconds; 0 leaves the change to KDE (one call, no fade of ours).
+    /// </summary>
+    public double DimFadeSeconds
+    {
+        get
+        {
+            lock (_sync) return _dimFadeSeconds;
+        }
+        set
+        {
+            if (!IsValidFade(value)) throw new ArgumentOutOfRangeException(nameof(value), value, null);
+            lock (_sync)
+            {
+                if (_dimFadeSeconds.Equals(value)) return;
+                _dimFadeSeconds = value;
+            }
+
+            _logger.LogInformation("Dimming fade set to {Seconds} s", value);
+            UserSettings.Save("DimFadeSeconds", value);
             Publish();
         }
     }
@@ -359,7 +389,7 @@ public sealed class StationController
         {
             return new StatusSnapshot(_automaticMode, _activeTrigger != null, _activeTrigger,
                 _triggerProcesses.ToArray(), _stations.Values.ToArray(), AppPaths.UserSettingsFile, AppPaths.Version,
-                new DimmingStatus(_dimmingSupported, _dimDisplays, _dimmed, _vrGame));
+                new DimmingStatus(_dimmingSupported, _dimDisplays, _dimmed, _vrGame, _dimFadeSeconds));
         }
     }
 
@@ -541,4 +571,5 @@ public sealed record StatusSnapshot(
 /// <param name="Enabled">Dim the displays while a VR game is shown (AppSettings:DimDisplaysInVr).</param>
 /// <param name="Dimmed">The displays are dimmed right now.</param>
 /// <param name="Game">The VR game being shown, if any.</param>
-public sealed record DimmingStatus(bool Supported, bool Enabled, bool Dimmed, string? Game);
+/// <param name="FadeSeconds">How long dimming and restoring fade (AppSettings:DimFadeSeconds); 0 = KDE's own change.</param>
+public sealed record DimmingStatus(bool Supported, bool Enabled, bool Dimmed, string? Game, double FadeSeconds);
