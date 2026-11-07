@@ -252,7 +252,7 @@ public sealed class CamelCaseEnumConverter<TEnum>() : JsonStringEnumConverter<TE
     where TEnum : struct, Enum;
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web,
-    Converters = [typeof(CamelCaseEnumConverter<StationState>)])]
+    Converters = [typeof(CamelCaseEnumConverter<StationState>), typeof(CamelCaseEnumConverter<BluetoothState>)])]
 [JsonSerializable(typeof(StatusSnapshot))]
 [JsonSerializable(typeof(StationInfo[]))]
 [JsonSerializable(typeof(CommandResult))]

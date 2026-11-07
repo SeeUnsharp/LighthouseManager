@@ -95,6 +95,13 @@ internal static class Program
             return Failure;
         }
 
+        // Otherwise every base station would retry for minutes before failing
+        if ((await manager.GetBluetoothStateAsync(ct)).Describe() is { } problem)
+        {
+            Log.Error("{Problem}", problem);
+            return Failure;
+        }
+
         return await command();
     }
 

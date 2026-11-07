@@ -17,7 +17,7 @@ public class ApiContractTests
         new Server.StationInfo("AA:BB:CC:DD:EE:02", null, LighthouseManager.Core.StationState.Booting, null, true,
             "Not reachable")
     ], "/home/user/.config/lighthousemanager/appsettings.json", "2.1.0",
-        new Server.DimmingStatus(true, true, true, "Beat Saber", 2.5));
+        new Server.DimmingStatus(true, true, true, "Beat Saber", 2.5), LighthouseManager.Core.BluetoothState.NoAdapter);
 
     [Fact]
     public void Status_snapshot_round_trips_from_service_to_tray()
@@ -32,6 +32,7 @@ public class ApiContractTests
         Assert.Equal("/home/user/.config/lighthousemanager/appsettings.json", client.SettingsFile);
         Assert.Equal("2.1.0", client.Version);
         Assert.Equal(new Client.DimmingStatus(true, true, true, "Beat Saber", 2.5), client.Dimming);
+        Assert.Equal(Client.BluetoothState.NoAdapter, client.Bluetooth);
         Assert.Collection(client.Stations,
             s =>
             {
@@ -67,6 +68,19 @@ public class ApiContractTests
         Assert.Contains(
             "\"dimming\":{\"supported\":true,\"enabled\":true,\"dimmed\":true,\"game\":\"Beat Saber\",\"fadeSeconds\":2.5}",
             json);
+        Assert.Contains("\"bluetooth\":\"noAdapter\"", json);
+    }
+
+    [Fact]
+    public void Every_bluetooth_state_is_known_to_the_tray_and_older_services_mean_unknown()
+    {
+        foreach (var state in Enum.GetValues<LighthouseManager.Core.BluetoothState>())
+            Assert.True(Enum.TryParse<Client.BluetoothState>(state.ToString(), out _), $"Tray misses state {state}");
+
+        var client = JsonSerializer.Deserialize(
+            """{"automaticMode":true,"triggerActive":false,"triggerProcess":null,"triggerProcesses":[],"stations":[]}""",
+            Client.ApiJsonContext.Default.StatusSnapshot)!;
+        Assert.Equal(Client.BluetoothState.Unknown, client.Bluetooth);
     }
 
     [Fact]

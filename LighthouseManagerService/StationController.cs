@@ -28,6 +28,7 @@ public sealed class StationController
     private CancellationTokenSource? _automaticCts;
     private bool _automaticMode;
     private string? _activeTrigger;
+    private BluetoothState _bluetooth;
     private bool _dimDisplays;
     private bool _dimmingSupported;
     private double _dimFadeSeconds;
@@ -161,6 +162,36 @@ public sealed class StationController
             UserSettings.Save("DimFadeSeconds", value);
             Publish();
         }
+    }
+
+    public BluetoothState Bluetooth
+    {
+        get
+        {
+            lock (_sync) return _bluetooth;
+        }
+    }
+
+    /// <summary>
+    ///     Checks whether Bluetooth is on, before every operation and periodically by the <see cref="Worker" />. When
+    ///     it comes back, all stations are read again (that also clears the "turned off" errors).
+    /// </summary>
+    public async Task<BluetoothState> CheckBluetoothAsync(CancellationToken ct)
+    {
+        var state = await _manager.GetBluetoothStateAsync(ct);
+        BluetoothState previous;
+        lock (_sync)
+        {
+            previous = _bluetooth;
+            _bluetooth = state;
+        }
+
+        if (state == previous) return state;
+        if (state.Describe() is { } problem) _logger.LogWarning("{Problem}", problem);
+        else if (previous.IsUnavailable()) _logger.LogInformation("Bluetooth is available again");
+        Publish();
+        if (previous.IsUnavailable() && !state.IsUnavailable()) ScheduleRefresh(Addresses, TimeSpan.Zero);
+        return state;
     }
 
     /// <summary>
@@ -389,7 +420,7 @@ public sealed class StationController
         {
             return new StatusSnapshot(_automaticMode, _activeTrigger != null, _activeTrigger,
                 _triggerProcesses.ToArray(), _stations.Values.ToArray(), AppPaths.UserSettingsFile, AppPaths.Version,
-                new DimmingStatus(_dimmingSupported, _dimDisplays, _dimmed, _vrGame, _dimFadeSeconds));
+                new DimmingStatus(_dimmingSupported, _dimDisplays, _dimmed, _vrGame, _dimFadeSeconds), _bluetooth);
         }
     }
 
@@ -450,6 +481,15 @@ public sealed class StationController
 
         try
         {
+            // Turned off: fail right away with the reason, instead of every station retrying for minutes
+            // Short: it's shown per station, clients explain the state from "bluetooth" in the status
+            if ((await CheckBluetoothAsync(cts.Token)).Summary() is { } problem)
+            {
+                Update(addresses, s => s with { Busy = false, Error = problem });
+                Clear(cts);
+                return false;
+            }
+
             await _bluetoothLock.WaitAsync(cts.Token);
         }
         catch (OperationCanceledException)
@@ -565,7 +605,8 @@ public sealed record StatusSnapshot(
     StationInfo[] Stations,
     string SettingsFile,
     string Version,
-    DimmingStatus Dimming);
+    DimmingStatus Dimming,
+    BluetoothState Bluetooth);
 
 /// <param name="Supported">Whether the displays can be dimmed here (Linux with KDE Plasma 6.1+ running, for now).</param>
 /// <param name="Enabled">Dim the displays while a VR game is shown (AppSettings:DimDisplaysInVr).</param>

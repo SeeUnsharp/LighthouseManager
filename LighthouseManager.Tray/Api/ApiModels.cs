@@ -16,6 +16,15 @@ public enum StationState
     Awake
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter<BluetoothState>))]
+public enum BluetoothState
+{
+    Unknown,
+    On,
+    Off,
+    NoAdapter
+}
+
 public sealed record StationInfo(
     string Address,
     string? Name,
@@ -33,7 +42,8 @@ public sealed record StatusSnapshot(
     StationInfo[] Stations,
     string? SettingsFile = null,
     string? Version = null,
-    DimmingStatus? Dimming = null);
+    DimmingStatus? Dimming = null,
+    BluetoothState Bluetooth = BluetoothState.Unknown);
 
 public sealed record DimmingStatus(bool Supported, bool Enabled, bool Dimmed, string? Game, double FadeSeconds = 1.5);
 

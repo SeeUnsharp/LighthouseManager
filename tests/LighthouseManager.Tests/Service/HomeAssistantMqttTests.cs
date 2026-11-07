@@ -15,7 +15,7 @@ public class HomeAssistantMqttTests
 
     private static StatusSnapshot Status(params StationInfo[] stations) =>
         new(true, true, "vrserver", ["vrserver"], stations, "/settings.json", "2.1.0",
-            new DimmingStatus(true, false, false, null, 1.5));
+            new DimmingStatus(true, false, false, null, 1.5), BluetoothState.On);
 
     [Fact]
     public void Topics_are_per_computer()

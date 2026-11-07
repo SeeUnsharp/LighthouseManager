@@ -62,7 +62,8 @@ for a few seconds fixed it).
   "stations": [ /* Station objects */ ],
   "settingsFile": "/home/user/.config/lighthousemanager/appsettings.json",
   "version": "2.0.0",
-  "dimming": { "supported": true, "enabled": true, "dimmed": false, "game": null, "fadeSeconds": 1.5 }
+  "dimming": { "supported": true, "enabled": true, "dimmed": false, "game": null, "fadeSeconds": 1.5 },
+  "bluetooth": "on"
 }
 ```
 
@@ -76,6 +77,7 @@ for a few seconds fixed it).
 | `settingsFile` | The user settings file to add base stations to (restart the service afterwards) |
 | `version` | Version of the service |
 | `dimming` | [Dimming displays during VR](#dimming-displays-during-vr): `supported` (the brightness can be changed here: Linux with KDE Plasma 6.1+ running; checked every 30 s), `enabled`, `dimmed` (right now), `game` (the VR game being shown, or `null`), `fadeSeconds` (how long dimming and restoring fade, 0–10; 0 = KDE's own brightness change, without a fade of ours) |
+| `bluetooth` | `on`, `off` (turned off, also airplane mode), `noAdapter` (none found, or the Bluetooth service isn't running), `unknown` (couldn't be checked). Checked every 5 s and before every Bluetooth operation; while `off` or `noAdapter`, commands fail right away and stations get `error` with the reason, automatic wake/sleep waits, and all stations are read again once it's back |
 
 ## Endpoints
 

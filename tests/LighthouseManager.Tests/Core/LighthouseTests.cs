@@ -41,4 +41,17 @@ public class LighthouseTests
     {
         Assert.Equal(expected, Lighthouse.IsInState(raw, state));
     }
+
+    [Theory]
+    [InlineData(BluetoothState.On, false)]
+    [InlineData(BluetoothState.Off, true)]
+    [InlineData(BluetoothState.NoAdapter, true)]
+    // The check failed: try anyway rather than block everything
+    [InlineData(BluetoothState.Unknown, false)]
+    public void Only_off_or_missing_bluetooth_stops_operations(BluetoothState state, bool unavailable)
+    {
+        Assert.Equal(unavailable, state.IsUnavailable());
+        Assert.Equal(unavailable, state.Describe() != null);
+        Assert.Equal(unavailable, state.Summary() != null);
+    }
 }

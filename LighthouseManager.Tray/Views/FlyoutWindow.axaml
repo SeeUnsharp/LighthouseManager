@@ -47,13 +47,19 @@
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top"
                                 IsEnabled="{Binding Connected}">
                         <Button Classes="small" Content="Find" Command="{Binding FindStationsCommand}"
+                                IsEnabled="{Binding CanUseBluetooth}"
                                 ToolTip.Tip="Search for base stations nearby and add them" />
                         <Button Classes="small" Content="Refresh" Command="{Binding RefreshCommand}"
+                                IsEnabled="{Binding CanUseBluetooth}"
                                 ToolTip.Tip="Read the current state of all base stations" />
                         <Button Classes="small" Content="⚙" Command="{Binding ShowSettingsCommand}"
                                 ToolTip.Tip="Settings" />
                     </StackPanel>
                 </Grid>
+
+                <!-- Bluetooth off or missing: nothing below can work -->
+                <TextBlock Foreground="#DA3633" Text="{Binding BluetoothHint}" TextWrapping="Wrap"
+                           IsVisible="{Binding BluetoothHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
                 <!-- Automatic mode -->
                 <Grid ColumnDefinitions="*,Auto" IsEnabled="{Binding Connected}">
@@ -77,7 +83,7 @@
                 <Separator />
 
                 <!-- All stations -->
-                <Grid ColumnDefinitions="*,8,*" IsEnabled="{Binding HasStations}">
+                <Grid ColumnDefinitions="*,8,*" IsEnabled="{Binding CanControlStations}">
                     <Button Content="Turn all on" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                             Command="{Binding WakeAllCommand}" />
                     <Button Grid.Column="2" Content="Sleep all" HorizontalAlignment="Stretch"
@@ -128,7 +134,8 @@
                            Text="Use Find to search for them, or add their addresses to the settings file:" />
                 <TextBlock Classes="secondary" Text="{Binding SettingsFile}" TextWrapping="Wrap" />
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Classes="small" Content="Find base stations" Command="{Binding FindStationsCommand}" />
+                    <Button Classes="small" Content="Find base stations" Command="{Binding FindStationsCommand}"
+                            IsEnabled="{Binding CanUseBluetooth}" />
                     <Button Classes="small" Content="Open settings" Command="{Binding OpenSettingsCommand}" />
                 </StackPanel>
             </StackPanel>
@@ -156,10 +163,12 @@
                                          Classes.error="{Binding HasError}" />
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding DisplayName}" />
-                                    <TextBlock Classes="secondary" Text="{Binding StateText}" />
+                                    <TextBlock Classes="secondary" Text="{Binding StateText}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding StateText}" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
-                                            VerticalAlignment="Center">
+                                            VerticalAlignment="Center"
+                                            IsEnabled="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).CanUseBluetooth}">
                                     <!-- Only while running: identify also wakes a sleeping station (firmware). Leftmost, so
                                          On/Sleep stay aligned across rows when it's hidden. -->
                                     <Button Classes="small" Content="Identify" Command="{Binding IdentifyCommand}"

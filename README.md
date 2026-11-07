@@ -50,7 +50,7 @@ The command-line tool talks to the base stations directly. Two processes connect
 ## Exit codes
 Based on success or not LighthouseManager will exit with different codes
 - `0` All commands executed successfully
-- `1` One or more commands failed after given retry attempt, or invalid arguments
+- `1` One or more commands failed after given retry attempt, invalid arguments, or Bluetooth is turned off / no adapter was found (checked before connecting, with a message)
 
 # LighthouseManagerService
 LighthouseManagerService is a little background service that watches for trigger processes in a given interval (default 1000ms): base stations are woken while any of them runs and put to sleep when all of them exited. By default the trigger is SteamVR (`vrserver`), but any VR runtime or application works.

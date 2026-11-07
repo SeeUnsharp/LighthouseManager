@@ -74,6 +74,7 @@ try
     {
         o.SerializerOptions.TypeInfoResolverChain.Insert(0, ApiJsonContext.Default);
         o.SerializerOptions.Converters.Add(new CamelCaseEnumConverter<StationState>());
+        o.SerializerOptions.Converters.Add(new CamelCaseEnumConverter<BluetoothState>());
     });
 
     var allowedOrigins = settings.GetAllowedOrigins();

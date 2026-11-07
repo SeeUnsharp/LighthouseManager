@@ -25,12 +25,18 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly ApiClient _api;
 
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText), nameof(HasNoStations), nameof(HasStations))]
+    [NotifyPropertyChangedFor(nameof(BluetoothUnavailable), nameof(BluetoothHint), nameof(CanUseBluetooth))]
+    [NotifyPropertyChangedFor(nameof(CanControlStations))]
     private bool _connected;
 
     // Set from the API; changing it from the UI goes through SetAutomaticModeCommand
     [ObservableProperty] private bool _automaticMode;
 
     [ObservableProperty] private bool _dimmingSupported;
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText), nameof(BluetoothUnavailable), nameof(BluetoothHint))]
+    [NotifyPropertyChangedFor(nameof(CanUseBluetooth), nameof(CanControlStations))]
+    private BluetoothState _bluetooth;
 
     // Two-way with the slider (see DimmingSlider): changes are sent once it rests, see OnDimmingLevelChanged
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(DimmingText))]
@@ -51,7 +57,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     [ObservableProperty] private OverallState _overall = OverallState.Disconnected;
 
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasNoStations), nameof(HasStations))]
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasNoStations), nameof(HasStations), nameof(CanControlStations))]
     private int _stationCount;
 
     [ObservableProperty] private string? _settingsFile;
@@ -210,8 +216,30 @@ public sealed partial class MainViewModel : ObservableObject
     public event EventHandler? Changed;
 
     public string StatusText => !Connected ? $"Service not reachable ({_api.BaseAddress.Authority})"
+        : Bluetooth == BluetoothState.Off ? "Bluetooth is off"
+        : Bluetooth == BluetoothState.NoAdapter ? "No Bluetooth adapter"
         : TriggerProcess != null ? $"In use by {TriggerProcess}"
         : "No trigger process running";
+
+    public bool BluetoothUnavailable => Connected && Bluetooth is BluetoothState.Off or BluetoothState.NoAdapter;
+
+    /// <summary>
+    ///     Commands that need Bluetooth (find, refresh, on, sleep, identify) can work.
+    /// </summary>
+    public bool CanUseBluetooth => Connected && !BluetoothUnavailable;
+
+    public bool CanControlStations => HasStations && CanUseBluetooth;
+
+    /// <summary>
+    ///     What to do when Bluetooth can't be used, shown in the window.
+    /// </summary>
+    public string? BluetoothHint => !Connected ? null : Bluetooth switch
+    {
+        BluetoothState.Off => "Turn Bluetooth on to control the base stations.",
+        BluetoothState.NoAdapter =>
+            "No Bluetooth adapter found, or the Bluetooth service isn't running. Plug in an adapter or start the service.",
+        _ => null
+    };
 
     /// <summary>
     ///     Follows the service's live events, reconnecting until <paramref name="ct" /> fires.
@@ -276,7 +304,8 @@ public sealed partial class MainViewModel : ObservableObject
         {
             var result = await command(_api);
             Apply(result.Status);
-            if (!result.Success) LastError = "Command failed, base station not reachable?";
+            // Bluetooth off: the hint at the top already says why
+            if (!result.Success && !BluetoothUnavailable) LastError = "Command failed, base station not reachable?";
         }
         catch (Exception ex)
         {
@@ -507,6 +536,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Connected = true;
         AutomaticMode = snapshot.AutomaticMode;
+        Bluetooth = snapshot.Bluetooth;
         // Older services don't report it
         DimmingSupported = snapshot.Dimming?.Supported ?? false;
         _lastDimming = snapshot.Dimming;
@@ -539,6 +569,7 @@ public sealed partial class MainViewModel : ObservableObject
     private void UpdateOverall()
     {
         Overall = !Connected ? OverallState.Disconnected
+            : BluetoothUnavailable ? OverallState.Error
             : Stations.Any(s => s.Busy || s.State == StationState.Booting) ? OverallState.Busy
             : Stations.Any(s => s.HasError) ? OverallState.Error
             : Stations.Any(s => s.IsAwake) ? OverallState.Awake
