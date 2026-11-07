@@ -60,6 +60,11 @@ public sealed class ApiClient(Uri baseAddress) : IDisposable
         return list?.Processes ?? [];
     }
 
+    public async Task<StatusSnapshot> GetStatusAsync()
+    {
+        return (await _http.GetFromJsonAsync("api/status", ApiJsonContext.Default.StatusSnapshot))!;
+    }
+
     public async Task<MqttConfig> GetMqttAsync()
     {
         return (await _http.GetFromJsonAsync("api/mqtt", ApiJsonContext.Default.MqttConfig))!;

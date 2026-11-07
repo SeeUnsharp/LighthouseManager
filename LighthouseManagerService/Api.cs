@@ -36,8 +36,7 @@ public static class Api
             if (request.FadeSeconds is { } fade && !StationController.IsValidFade(fade))
                 return TypedResults.Json(new ApiError("fadeSeconds must be between 0 and 10"),
                     ApiJsonContext.Default.ApiError, statusCode: StatusCodes.Status400BadRequest);
-            c.DimDisplaysInVr = request.Enabled;
-            if (request.FadeSeconds is { } seconds) c.DimFadeSeconds = seconds;
+            c.SetDimming(request.Enabled, request.FadeSeconds);
             return Results.Ok(c.GetSnapshot());
         });
 

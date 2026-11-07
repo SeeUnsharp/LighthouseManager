@@ -159,15 +159,21 @@ public sealed class BaseStationManager(ILogger<BaseStationManager> logger)
             var adapter = await Windows.Devices.Bluetooth.BluetoothAdapter.GetDefaultAsync().AsTask(cancellationToken);
             if (adapter == null) return BluetoothState.NoAdapter;
             var radio = await adapter.GetRadioAsync().AsTask(cancellationToken);
-            return radio?.State == Windows.Devices.Radios.RadioState.On ? BluetoothState.On : BluetoothState.Off;
+            // No radio access or an unknown state: don't block anything because of it
+            return radio?.State switch
+            {
+                Windows.Devices.Radios.RadioState.On => BluetoothState.On,
+                Windows.Devices.Radios.RadioState.Off or Windows.Devices.Radios.RadioState.Disabled => BluetoothState.Off,
+                _ => BluetoothState.Unknown
+            };
 #else
             var adapters = await Linux.Bluetooth.BlueZManager.GetAdaptersAsync().WaitAsync(cancellationToken);
             if (adapters.Count == 0) return BluetoothState.NoAdapter;
-            // Turned off and rfkill (airplane mode) both show as not powered
-            foreach (var adapter in adapters)
-                if (await Linux.Bluetooth.Adapter1Extensions.GetPoweredAsync(adapter).WaitAsync(cancellationToken))
-                    return BluetoothState.On;
-            return BluetoothState.Off;
+            // The adapter InTheHand works with (its first one): another powered adapter doesn't help.
+            // Turned off and rfkill (airplane mode) both show as not powered.
+            return await Linux.Bluetooth.Adapter1Extensions.GetPoweredAsync(adapters[0]).WaitAsync(cancellationToken)
+                ? BluetoothState.On
+                : BluetoothState.Off;
 #endif
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

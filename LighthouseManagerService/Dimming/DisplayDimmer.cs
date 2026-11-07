@@ -77,6 +77,8 @@ public class DisplayDimmer(ILogger<DisplayDimmer> logger, IOptions<AppSettings> 
                 {
                     try
                     {
+                        // The game in the status is current already while the fade runs
+                        controller.SetDimmingState(policy.Dimmed, game);
                         await (dim ? DimAsync(displays, stoppingToken) : RestoreAsync(displays, stoppingToken));
                         policy.Applied(dim);
                         failureLogged = false;
@@ -130,7 +132,15 @@ public class DisplayDimmer(ILogger<DisplayDimmer> logger, IOptions<AppSettings> 
         var (saved, changes) = DimmingPlan.Dim(displays, _store.Load());
         // Saved first: the original brightness must survive a crash right after dimming
         _store.Save(saved);
-        await TransitionAsync(control, displays, changes, Fade, ct);
+        // A fade can take up to 10 s: turning dimming off meanwhile stops it where it is
+        if (!await TransitionAsync(control, displays, changes, Fade, ct, stop: () => !controller.DimDisplaysInVr))
+        {
+            // Restored from there right after: halfway would otherwise look changed by the user
+            _interrupted.UnionWith(changes.Select(c => c.Name));
+            logger.LogInformation("Dimming stopped, it was turned off");
+            return;
+        }
+
         logger.LogInformation("Dimmed {Count} display(s)", changes.Count);
     }
 
@@ -157,9 +167,11 @@ public class DisplayDimmer(ILogger<DisplayDimmer> logger, IOptions<AppSettings> 
     /// <summary>
     ///     Changes the brightness gradually over <paramref name="duration" /> (zero: at once), all displays together.
     /// </summary>
-    private static async Task TransitionAsync(IDisplayBrightnessControl control,
+    /// <param name="stop">Checked before every step: true leaves the displays where they are.</param>
+    /// <returns>false if <paramref name="stop" /> ended it early.</returns>
+    private static async Task<bool> TransitionAsync(IDisplayBrightnessControl control,
         IReadOnlyList<DisplayBrightness> displays, IReadOnlyList<(string Name, int Brightness)> changes,
-        TimeSpan duration, CancellationToken ct)
+        TimeSpan duration, CancellationToken ct, Func<bool>? stop = null)
     {
         var from = changes.Select(c => displays.First(d => d.Name == c.Name).Brightness).ToList();
         try
@@ -168,6 +180,7 @@ public class DisplayDimmer(ILogger<DisplayDimmer> logger, IOptions<AppSettings> 
             var watch = Stopwatch.StartNew();
             while (watch.Elapsed < duration)
             {
+                if (stop?.Invoke() == true) return false;
                 var progress = watch.Elapsed / duration;
                 for (var i = 0; i < changes.Count; i++)
                     await control.SetBrightnessAsync(changes[i].Name,
@@ -184,5 +197,6 @@ public class DisplayDimmer(ILogger<DisplayDimmer> logger, IOptions<AppSettings> 
         using var timeout = ct.IsCancellationRequested ? new CancellationTokenSource(ShutdownTimeout) : null;
         foreach (var (name, brightness) in changes)
             await control.SetBrightnessAsync(name, brightness, timeout?.Token ?? ct);
+        return true;
     }
 }

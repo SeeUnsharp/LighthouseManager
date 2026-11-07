@@ -112,6 +112,22 @@ public sealed class UserSettingsTests : IDisposable
     }
 
     [Fact]
+    public void Several_entries_are_saved_together_into_the_template()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        _ = File;
+        UserSettings.AddTo(new ConfigurationManager());
+
+        UserSettings.Save(("DimDisplaysInVr", true), ("DimFadeSeconds", 2.5));
+
+        var settings = new ConfigurationBuilder().AddJsonFile(File, optional: false).Build()
+            .GetSection("AppSettings").Get<AppSettings>()!;
+        Assert.True(settings.DimDisplaysInVr);
+        Assert.Equal(2.5, settings.DimFadeSeconds);
+        Assert.Empty(ReadBack());
+    }
+
+    [Fact]
     public void Decimal_numbers_are_saved_invariant_and_replaced_again()
     {
         if (!OperatingSystem.IsLinux()) return;

@@ -28,7 +28,11 @@ public sealed class StationController
     private CancellationTokenSource? _automaticCts;
     private bool _automaticMode;
     private string? _activeTrigger;
+    private static readonly TimeSpan BluetoothCheckTimeout = TimeSpan.FromSeconds(3);
+
     private BluetoothState _bluetooth;
+    private long _bluetoothChecks;
+    private long _bluetoothStored;
     private bool _dimDisplays;
     private bool _dimmingSupported;
     private double _dimFadeSeconds;
@@ -122,18 +126,6 @@ public sealed class StationController
         {
             lock (_sync) return _dimDisplays;
         }
-        set
-        {
-            lock (_sync)
-            {
-                if (_dimDisplays == value) return;
-                _dimDisplays = value;
-            }
-
-            _logger.LogInformation("Dimming displays during VR {State}", value ? "enabled" : "disabled");
-            UserSettings.Save("DimDisplaysInVr", value);
-            Publish();
-        }
     }
 
     public const double MaxFadeSeconds = 10;
@@ -149,19 +141,38 @@ public sealed class StationController
         {
             lock (_sync) return _dimFadeSeconds;
         }
-        set
+    }
+
+    /// <summary>
+    ///     Changes both together: one save and one status update, so clients and the dimmer never see a mix of the
+    ///     new and the old value.
+    /// </summary>
+    /// <param name="fadeSeconds">null keeps it.</param>
+    public void SetDimming(bool enabled, double? fadeSeconds)
+    {
+        if (fadeSeconds is { } fade && !IsValidFade(fade))
+            throw new ArgumentOutOfRangeException(nameof(fadeSeconds), fade, null);
+        var changes = new List<(string, object)>();
+        lock (_sync)
         {
-            if (!IsValidFade(value)) throw new ArgumentOutOfRangeException(nameof(value), value, null);
-            lock (_sync)
+            if (_dimDisplays != enabled)
             {
-                if (_dimFadeSeconds.Equals(value)) return;
-                _dimFadeSeconds = value;
+                _dimDisplays = enabled;
+                changes.Add(("DimDisplaysInVr", enabled));
             }
 
-            _logger.LogInformation("Dimming fade set to {Seconds} s", value);
-            UserSettings.Save("DimFadeSeconds", value);
-            Publish();
+            if (fadeSeconds is { } seconds && !_dimFadeSeconds.Equals(seconds))
+            {
+                _dimFadeSeconds = seconds;
+                changes.Add(("DimFadeSeconds", seconds));
+            }
         }
+
+        if (changes.Count == 0) return;
+        _logger.LogInformation("Dimming displays during VR {State}, fade {Seconds} s", enabled ? "enabled" : "disabled",
+            DimFadeSeconds);
+        UserSettings.Save(changes.ToArray());
+        Publish();
     }
 
     public BluetoothState Bluetooth
@@ -178,10 +189,30 @@ public sealed class StationController
     /// </summary>
     public async Task<BluetoothState> CheckBluetoothAsync(CancellationToken ct)
     {
-        var state = await _manager.GetBluetoothStateAsync(ct);
+        long check;
+        lock (_sync) check = ++_bluetoothChecks;
+
+        // A hanging D-Bus/WinRT call must not hold up the trigger watcher or a command: then just try
+        BluetoothState state;
+        using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+        {
+            timeout.CancelAfter(BluetoothCheckTimeout);
+            try
+            {
+                state = await _manager.GetBluetoothStateAsync(timeout.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                state = BluetoothState.Unknown;
+            }
+        }
+
         BluetoothState previous;
         lock (_sync)
         {
+            // Checks run in parallel (watcher, commands): a slower, older one must not overwrite a newer result
+            if (check < _bluetoothStored) return state;
+            _bluetoothStored = check;
             previous = _bluetooth;
             _bluetooth = state;
         }

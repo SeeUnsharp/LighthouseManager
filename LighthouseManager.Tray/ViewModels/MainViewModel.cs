@@ -43,6 +43,7 @@ public sealed partial class MainViewModel : ObservableObject
     private double _dimmingLevel;
 
     private CancellationTokenSource? _dimmingSend;
+    private Task _dimmingRequest = Task.CompletedTask;
     private bool _applyingSnapshot;
     private DimmingStatus? _lastDimming;
 
@@ -365,10 +366,34 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    private async Task AutoDiscoverAsync()
+    {
+        await FindStationsCommand.ExecuteAsync(null);
+        if (!IsDiscoveryFailed) return;
+        try
+        {
+            // Bluetooth turned out to be off (the state may not have arrived yet): search again once it's on
+            Apply(await _api.GetStatusAsync());
+            if (BluetoothUnavailable)
+            {
+                LastError = null;
+                _autoDiscoveryDone = false;
+            }
+        }
+        catch (Exception)
+        {
+            // Service gone; the event loop reconnects
+        }
+    }
+
+    // The last search failed (not: found nothing)
+    private bool IsDiscoveryFailed { get; set; }
+
     [RelayCommand]
     private async Task FindStations()
     {
         if (IsDiscovering) return;
+        IsDiscoveryFailed = false;
         Found.Clear();
         DiscoveryMessage = null;
         LastError = null;
@@ -386,6 +411,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            IsDiscoveryFailed = true;
             LastError = $"Search failed: {ex.Message}";
         }
         finally
@@ -501,11 +527,17 @@ public sealed partial class MainViewModel : ObservableObject
             await Task.Delay(TimeSpan.FromMilliseconds(400), send.Token);
             LastError = null;
             var (enabled, fadeSeconds) = DimmingSlider.ToRequest(position);
-            var snapshot = await _api.SetDimmingAsync(enabled, fadeSeconds);
+            // One request at a time: two in flight could arrive in the wrong order and leave the older value
+            var request = SendAfterAsync(_dimmingRequest, enabled, fadeSeconds);
+            _dimmingRequest = request;
+            var snapshot = await request;
             // A newer value may be waiting meanwhile; then that one's answer counts
             if (send.IsCancellationRequested) return;
             _dimmingSend = null;
             Apply(snapshot);
+            // Services before the fade setting ignore it
+            if (fadeSeconds is { } fade && snapshot.Dimming?.FadeSeconds.Equals(fade) != true)
+                LastError = "The service doesn't support the fade time yet. Update LighthouseManager.";
         }
         catch (OperationCanceledException) when (send.IsCancellationRequested)
         {
@@ -523,6 +555,20 @@ public sealed partial class MainViewModel : ObservableObject
         {
             send.Dispose();
         }
+    }
+
+    private async Task<StatusSnapshot> SendAfterAsync(Task previous, bool enabled, double? fadeSeconds)
+    {
+        try
+        {
+            await previous;
+        }
+        catch (Exception)
+        {
+            // Reported by its own sender
+        }
+
+        return await _api.SetDimmingAsync(enabled, fadeSeconds);
     }
 
     private void ApplyDimming(DimmingStatus dimming)
@@ -557,11 +603,11 @@ public sealed partial class MainViewModel : ObservableObject
         for (var i = 0; i < snapshot.Stations.Length; i++) Stations[i].Apply(snapshot.Stations[i]);
         StationCount = Stations.Count;
 
-        // First start: nothing configured yet, look for base stations right away
-        if (StationCount == 0 && !_autoDiscoveryDone)
+        // First start: nothing configured yet, look for base stations right away (once Bluetooth can be used)
+        if (StationCount == 0 && !_autoDiscoveryDone && CanUseBluetooth)
         {
             _autoDiscoveryDone = true;
-            FindStationsCommand.Execute(null);
+            _ = AutoDiscoverAsync();
         }
         UpdateOverall();
     }

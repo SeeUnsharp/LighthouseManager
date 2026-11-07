@@ -37,7 +37,11 @@ public class App : Application
             _trayIcon.Clicked += (_, _) => ToggleFlyout();
             TrayIcon.SetIcons(this, [_trayIcon]);
 
-            _viewModel.Changed += (_, _) => UpdateTrayIcon();
+            _viewModel.Changed += (_, _) =>
+            {
+                UpdateTrayIcon();
+                UpdateBluetoothItems();
+            };
             // The update check runs separately from the status events
             _viewModel.PropertyChanged += (_, e) =>
             {
@@ -70,6 +74,11 @@ public class App : Application
     private NativeMenuItem? _updateItem;
     private NativeMenuItemSeparator? _updateSeparator;
 
+    // Disabled while Bluetooth is off, like the flyout's buttons (see UpdateBluetoothItems)
+    private NativeMenuItem? _wakeItem;
+    private NativeMenuItem? _sleepItem;
+    private NativeMenuItem? _findItem;
+
     private NativeMenu CreateMenu(IClassicDesktopStyleApplicationLifetime desktop)
     {
         // Shown only while an update is available (see UpdateMenu)
@@ -77,11 +86,11 @@ public class App : Application
         _updateSeparator = new NativeMenuItemSeparator { IsVisible = false };
         var open = new NativeMenuItem("Open");
         open.Click += (_, _) => _flyout!.ShowFlyout();
-        var wake = new NativeMenuItem("Turn all on") { Command = _viewModel.WakeAllCommand };
-        var sleep = new NativeMenuItem("Sleep all") { Command = _viewModel.SleepAllCommand };
+        var wake = _wakeItem = new NativeMenuItem("Turn all on") { Command = _viewModel.WakeAllCommand };
+        var sleep = _sleepItem = new NativeMenuItem("Sleep all") { Command = _viewModel.SleepAllCommand };
         var settingsWindow = new NativeMenuItem("Settings…");
         settingsWindow.Click += (_, _) => ShowSettings();
-        var find = new NativeMenuItem("Find base stations…");
+        var find = _findItem = new NativeMenuItem("Find base stations…");
         find.Click += (_, _) =>
         {
             _flyout!.ShowFlyout();
@@ -160,6 +169,13 @@ public class App : Application
         _updateItem.Header = _viewModel.IsUpdating ? "Updating…" : $"{_viewModel.UpdateText}…";
         _updateItem.IsEnabled = !_viewModel.IsUpdating;
         _updateItem.IsVisible = _updateSeparator.IsVisible = _viewModel.IsUpdateAvailable;
+    }
+
+    private void UpdateBluetoothItems()
+    {
+        if (_viewModel == null || _wakeItem == null || _sleepItem == null || _findItem == null) return;
+        _wakeItem.IsEnabled = _sleepItem.IsEnabled = _viewModel.CanControlStations;
+        _findItem.IsEnabled = _viewModel.CanUseBluetooth;
     }
 
     private void UpdateTrayIcon()

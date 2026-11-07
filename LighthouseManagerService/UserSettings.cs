@@ -43,7 +43,21 @@ internal static class UserSettings
     ///     Writes one AppSettings entry to the user settings file, keeping comments and other settings.
     /// </summary>
     /// <param name="value">string, bool or double</param>
-    public static void Save(string key, object value)
+    public static void Save(string key, object value) => Save((key, value));
+
+    /// <summary>
+    ///     Writes several AppSettings entries with one write of the file.
+    /// </summary>
+    public static void Save(params (string Key, object Value)[] entries)
+    {
+        var file = AppPaths.UserSettingsFile;
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        var text = File.Exists(file) ? File.ReadAllText(file) : Template;
+        foreach (var (key, value) in entries) text = SetEntry(text, key, value);
+        AtomicFile.WriteAllText(file, text);
+    }
+
+    private static string SetEntry(string text, string key, object value)
     {
         var literal = value switch
         {
@@ -54,9 +68,6 @@ internal static class UserSettings
             _ => throw new ArgumentException($"Unsupported setting type {value.GetType()}", nameof(value))
         };
         var name = Regex.Escape(key);
-        var file = AppPaths.UserSettingsFile;
-        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        var text = File.Exists(file) ? File.ReadAllText(file) : Template;
 
         // An existing (not commented out) entry: replace its value
         var existing = new Regex($"^(?<prefix>\\s*\"{name}\"\\s*:\\s*)(?:\"(?:[^\"\\\\]|\\\\.)*\"|true|false|-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)",
@@ -90,7 +101,7 @@ internal static class UserSettings
             text = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine;
         }
 
-        AtomicFile.WriteAllText(file, text);
+        return text;
     }
 
     public static void AddTo(ConfigurationManager configuration)
