@@ -148,6 +148,53 @@ public sealed class BaseStationManager(ILogger<BaseStationManager> logger)
 #endif
 
     /// <summary>
+    ///     Whether Bluetooth is there and turned on. InTheHand's GetAvailabilityAsync only tells whether an adapter
+    ///     exists, not whether it's on.
+    /// </summary>
+    public async Task<BluetoothState> GetBluetoothStateAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+#if WINDOWS
+            var adapter = await Windows.Devices.Bluetooth.BluetoothAdapter.GetDefaultAsync().AsTask(cancellationToken);
+            if (adapter == null) return BluetoothState.NoAdapter;
+            var radio = await adapter.GetRadioAsync().AsTask(cancellationToken);
+            // No radio access or an unknown state: don't block anything because of it
+            return radio?.State switch
+            {
+                Windows.Devices.Radios.RadioState.On => BluetoothState.On,
+                Windows.Devices.Radios.RadioState.Off or Windows.Devices.Radios.RadioState.Disabled => BluetoothState.Off,
+                _ => BluetoothState.Unknown
+            };
+#else
+            var adapters = await Linux.Bluetooth.BlueZManager.GetAdaptersAsync().WaitAsync(cancellationToken);
+            if (adapters.Count == 0) return BluetoothState.NoAdapter;
+            // The adapter InTheHand works with (its first one): another powered adapter doesn't help.
+            // Turned off and rfkill (airplane mode) both show as not powered.
+            return await Linux.Bluetooth.Adapter1Extensions.GetPoweredAsync(adapters[0]).WaitAsync(cancellationToken)
+                ? BluetoothState.On
+                : BluetoothState.Off;
+#endif
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+#if !WINDOWS
+        catch (Tmds.DBus.DBusException ex) when (ex.ErrorName == "org.freedesktop.DBus.Error.ServiceUnknown")
+        {
+            // bluetoothd isn't running
+            return BluetoothState.NoAdapter;
+        }
+#endif
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Couldn't check whether Bluetooth is on");
+            return BluetoothState.Unknown;
+        }
+    }
+
+    /// <summary>
     ///     Changes the power state of all given base stations in parallel.
     /// </summary>
     /// <returns>true if every base station succeeded (within the retry budget).</returns>

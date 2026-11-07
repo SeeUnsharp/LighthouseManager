@@ -43,6 +43,8 @@ try
         .Validate(s => s.GetTriggerProcesses().Count > 0,
             "AppSettings:TriggerProcesses must contain at least one process name (comma separated).")
         .Validate(s => s.StateRefreshInterval >= 0, "AppSettings:StateRefreshInterval must not be negative.")
+        .Validate(s => StationController.IsValidFade(s.DimFadeSeconds),
+            "AppSettings:DimFadeSeconds must be between 0 and 10.")
         .ValidateOnStart();
     builder.Services.AddSingleton<BaseStationManager>();
     builder.Services.AddSingleton<StationController>();
@@ -72,6 +74,7 @@ try
     {
         o.SerializerOptions.TypeInfoResolverChain.Insert(0, ApiJsonContext.Default);
         o.SerializerOptions.Converters.Add(new CamelCaseEnumConverter<StationState>());
+        o.SerializerOptions.Converters.Add(new CamelCaseEnumConverter<BluetoothState>());
     });
 
     var allowedOrigins = settings.GetAllowedOrigins();

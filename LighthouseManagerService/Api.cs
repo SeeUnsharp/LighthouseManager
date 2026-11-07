@@ -33,7 +33,10 @@ public static class Api
             if (!c.DimmingSupported)
                 return TypedResults.Json(new ApiError("Dimming displays needs Linux with KDE Plasma 6.1 or newer"),
                     ApiJsonContext.Default.ApiError, statusCode: StatusCodes.Status400BadRequest);
-            c.DimDisplaysInVr = request.Enabled;
+            if (request.FadeSeconds is { } fade && !StationController.IsValidFade(fade))
+                return TypedResults.Json(new ApiError("fadeSeconds must be between 0 and 10"),
+                    ApiJsonContext.Default.ApiError, statusCode: StatusCodes.Status400BadRequest);
+            c.SetDimming(request.Enabled, request.FadeSeconds);
             return Results.Ok(c.GetSnapshot());
         });
 
@@ -196,7 +199,8 @@ internal sealed class NoListenerServer : IServer
 
 public sealed record AutomaticModeRequest(bool Enabled);
 
-public sealed record DimmingRequest(bool Enabled);
+/// <param name="FadeSeconds">0 to 10; null keeps the current value.</param>
+public sealed record DimmingRequest(bool Enabled, double? FadeSeconds = null);
 
 public sealed record AddStationsRequest(string[] Addresses);
 
@@ -247,7 +251,7 @@ public sealed class CamelCaseEnumConverter<TEnum>() : JsonStringEnumConverter<TE
     where TEnum : struct, Enum;
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web,
-    Converters = [typeof(CamelCaseEnumConverter<StationState>)])]
+    Converters = [typeof(CamelCaseEnumConverter<StationState>), typeof(CamelCaseEnumConverter<BluetoothState>)])]
 [JsonSerializable(typeof(StatusSnapshot))]
 [JsonSerializable(typeof(StationInfo[]))]
 [JsonSerializable(typeof(CommandResult))]

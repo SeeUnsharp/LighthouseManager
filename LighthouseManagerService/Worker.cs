@@ -11,6 +11,8 @@ namespace LighthouseManagerService;
 public class Worker(ILogger<Worker> logger, IOptions<AppSettings> settings, StationController controller)
     : BackgroundService
 {
+    private static readonly TimeSpan BluetoothCheckInterval = TimeSpan.FromSeconds(5);
+
     private readonly AutomationPolicy _policy = new(10, TimeSpan.FromSeconds(30));
 
     private Task<bool> _job = Task.FromResult(true);
@@ -30,6 +32,7 @@ public class Worker(ILogger<Worker> logger, IOptions<AppSettings> settings, Stat
         var refreshInterval = TimeSpan.FromSeconds(settings.Value.StateRefreshInterval);
         var refresh = controller.RefreshAsync(null, stoppingToken);
         var lastRefresh = DateTime.UtcNow;
+        var lastBluetoothCheck = DateTime.MinValue;
 
         // Polling instead of Process.Exited: exit events for non-child processes are unreliable on Linux
         try
@@ -40,6 +43,21 @@ public class Worker(ILogger<Worker> logger, IOptions<AppSettings> settings, Stat
                 // Current list: trigger processes can be changed through the API at any time
                 var runningTrigger = FindRunningTrigger(controller.TriggerProcesses);
                 controller.SetActiveTrigger(runningTrigger);
+
+                // Also without operations, so clients can show that Bluetooth is off
+                if (now - lastBluetoothCheck >= BluetoothCheckInterval)
+                {
+                    lastBluetoothCheck = now;
+                    await controller.CheckBluetoothAsync(stoppingToken);
+                }
+
+                // Nothing can work meanwhile: wait without using up the retries. When Bluetooth is back, the
+                // pending wake/sleep runs as usual (the policy only sees the trigger state from then on).
+                if (controller.Bluetooth.IsUnavailable())
+                {
+                    await Task.Delay(settings.Value.Interval, stoppingToken);
+                    continue;
+                }
 
                 // Faulted counts as failed; reading Result of a faulted task would throw and stop the service
                 var jobFailed = _job.IsCompleted && !(_job.IsCompletedSuccessfully && _job.Result);

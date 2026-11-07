@@ -25,15 +25,31 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly ApiClient _api;
 
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText), nameof(HasNoStations), nameof(HasStations))]
+    [NotifyPropertyChangedFor(nameof(BluetoothUnavailable), nameof(BluetoothHint), nameof(CanUseBluetooth))]
+    [NotifyPropertyChangedFor(nameof(CanControlStations))]
     private bool _connected;
 
     // Set from the API; changing it from the UI goes through SetAutomaticModeCommand
     [ObservableProperty] private bool _automaticMode;
 
-    // Same for dimming: SetDimDisplaysCommand
-    [ObservableProperty] private bool _dimDisplays;
-
     [ObservableProperty] private bool _dimmingSupported;
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText), nameof(BluetoothUnavailable), nameof(BluetoothHint))]
+    [NotifyPropertyChangedFor(nameof(CanUseBluetooth), nameof(CanControlStations))]
+    private BluetoothState _bluetooth;
+
+    // Two-way with the slider (see DimmingSlider): changes are sent once it rests, see OnDimmingLevelChanged
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(DimmingText))]
+    private double _dimmingLevel;
+
+    private CancellationTokenSource? _dimmingSend;
+    private Task _dimmingRequest = Task.CompletedTask;
+    private bool _applyingSnapshot;
+    private DimmingStatus? _lastDimming;
+
+    public int DimmingMaximum => DimmingSlider.Maximum;
+
+    public string DimmingText => DimmingSlider.Text((int)DimmingLevel);
 
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText))]
     private string? _triggerProcess;
@@ -42,7 +58,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     [ObservableProperty] private OverallState _overall = OverallState.Disconnected;
 
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasNoStations), nameof(HasStations))]
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasNoStations), nameof(HasStations), nameof(CanControlStations))]
     private int _stationCount;
 
     [ObservableProperty] private string? _settingsFile;
@@ -201,8 +217,30 @@ public sealed partial class MainViewModel : ObservableObject
     public event EventHandler? Changed;
 
     public string StatusText => !Connected ? $"Service not reachable ({_api.BaseAddress.Authority})"
+        : Bluetooth == BluetoothState.Off ? "Bluetooth is off"
+        : Bluetooth == BluetoothState.NoAdapter ? "No Bluetooth adapter"
         : TriggerProcess != null ? $"In use by {TriggerProcess}"
         : "No trigger process running";
+
+    public bool BluetoothUnavailable => Connected && Bluetooth is BluetoothState.Off or BluetoothState.NoAdapter;
+
+    /// <summary>
+    ///     Commands that need Bluetooth (find, refresh, on, sleep, identify) can work.
+    /// </summary>
+    public bool CanUseBluetooth => Connected && !BluetoothUnavailable;
+
+    public bool CanControlStations => HasStations && CanUseBluetooth;
+
+    /// <summary>
+    ///     What to do when Bluetooth can't be used, shown in the window.
+    /// </summary>
+    public string? BluetoothHint => !Connected ? null : Bluetooth switch
+    {
+        BluetoothState.Off => "Turn Bluetooth on to control the base stations.",
+        BluetoothState.NoAdapter =>
+            "No Bluetooth adapter found, or the Bluetooth service isn't running. Plug in an adapter or start the service.",
+        _ => null
+    };
 
     /// <summary>
     ///     Follows the service's live events, reconnecting until <paramref name="ct" /> fires.
@@ -267,7 +305,8 @@ public sealed partial class MainViewModel : ObservableObject
         {
             var result = await command(_api);
             Apply(result.Status);
-            if (!result.Success) LastError = "Command failed, base station not reachable?";
+            // Bluetooth off: the hint at the top already says why
+            if (!result.Success && !BluetoothUnavailable) LastError = "Command failed, base station not reachable?";
         }
         catch (Exception ex)
         {
@@ -327,10 +366,34 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    private async Task AutoDiscoverAsync()
+    {
+        await FindStationsCommand.ExecuteAsync(null);
+        if (!IsDiscoveryFailed) return;
+        try
+        {
+            // Bluetooth turned out to be off (the state may not have arrived yet): search again once it's on
+            Apply(await _api.GetStatusAsync());
+            if (BluetoothUnavailable)
+            {
+                LastError = null;
+                _autoDiscoveryDone = false;
+            }
+        }
+        catch (Exception)
+        {
+            // Service gone; the event loop reconnects
+        }
+    }
+
+    // The last search failed (not: found nothing)
+    private bool IsDiscoveryFailed { get; set; }
+
     [RelayCommand]
     private async Task FindStations()
     {
         if (IsDiscovering) return;
+        IsDiscoveryFailed = false;
         Found.Clear();
         DiscoveryMessage = null;
         LastError = null;
@@ -348,6 +411,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            IsDiscoveryFailed = true;
             LastError = $"Search failed: {ex.Message}";
         }
         finally
@@ -447,29 +511,83 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <param name="enabled">The switch's new state, see <see cref="SetAutomaticMode" />.</param>
-    [RelayCommand]
-    private async Task SetDimDisplays(bool enabled)
+    partial void OnDimmingLevelChanged(double value)
     {
-        LastError = null;
+        if (_applyingSnapshot) return;
+        // Sent once the slider rests for a moment, not for every step while dragging
+        _dimmingSend?.Cancel();
+        _dimmingSend = new CancellationTokenSource();
+        _ = SendDimmingAsync((int)value, _dimmingSend);
+    }
+
+    private async Task SendDimmingAsync(int position, CancellationTokenSource send)
+    {
         try
         {
-            Apply(await _api.SetDimmingAsync(enabled));
+            await Task.Delay(TimeSpan.FromMilliseconds(400), send.Token);
+            LastError = null;
+            var (enabled, fadeSeconds) = DimmingSlider.ToRequest(position);
+            // One request at a time: two in flight could arrive in the wrong order and leave the older value
+            var request = SendAfterAsync(_dimmingRequest, enabled, fadeSeconds);
+            _dimmingRequest = request;
+            var snapshot = await request;
+            // A newer value may be waiting meanwhile; then that one's answer counts
+            if (send.IsCancellationRequested) return;
+            _dimmingSend = null;
+            Apply(snapshot);
+            // Services before the fade setting ignore it
+            if (fadeSeconds is { } fade && snapshot.Dimming?.FadeSeconds.Equals(fade) != true)
+                LastError = "The service doesn't support the fade time yet. Update LighthouseManager.";
+        }
+        catch (OperationCanceledException) when (send.IsCancellationRequested)
+        {
+            // A newer value replaced it
         }
         catch (Exception ex)
         {
             LastError = ex.Message;
-            OnPropertyChanged(nameof(DimDisplays));
+            if (_dimmingSend != send) return;
+            _dimmingSend = null;
+            // Back to what the service has
+            if (_lastDimming is { } dimming) ApplyDimming(dimming);
         }
+        finally
+        {
+            send.Dispose();
+        }
+    }
+
+    private async Task<StatusSnapshot> SendAfterAsync(Task previous, bool enabled, double? fadeSeconds)
+    {
+        try
+        {
+            await previous;
+        }
+        catch (Exception)
+        {
+            // Reported by its own sender
+        }
+
+        return await _api.SetDimmingAsync(enabled, fadeSeconds);
+    }
+
+    private void ApplyDimming(DimmingStatus dimming)
+    {
+        _applyingSnapshot = true;
+        DimmingLevel = DimmingSlider.FromStatus(dimming.Enabled, dimming.FadeSeconds);
+        _applyingSnapshot = false;
     }
 
     private void Apply(StatusSnapshot snapshot)
     {
         Connected = true;
         AutomaticMode = snapshot.AutomaticMode;
+        Bluetooth = snapshot.Bluetooth;
         // Older services don't report it
         DimmingSupported = snapshot.Dimming?.Supported ?? false;
-        DimDisplays = snapshot.Dimming?.Enabled ?? false;
+        _lastDimming = snapshot.Dimming;
+        // Not while a slider change waits to be sent: the slider would jump back under the mouse
+        if (_dimmingSend == null && snapshot.Dimming is { } dimming) ApplyDimming(dimming);
         TriggerProcess = snapshot.TriggerProcess;
         SettingsFile = snapshot.SettingsFile;
         if (!TriggerProcesses.SequenceEqual(snapshot.TriggerProcesses)) TriggerProcesses = snapshot.TriggerProcesses;
@@ -485,11 +603,11 @@ public sealed partial class MainViewModel : ObservableObject
         for (var i = 0; i < snapshot.Stations.Length; i++) Stations[i].Apply(snapshot.Stations[i]);
         StationCount = Stations.Count;
 
-        // First start: nothing configured yet, look for base stations right away
-        if (StationCount == 0 && !_autoDiscoveryDone)
+        // First start: nothing configured yet, look for base stations right away (once Bluetooth can be used)
+        if (StationCount == 0 && !_autoDiscoveryDone && CanUseBluetooth)
         {
             _autoDiscoveryDone = true;
-            FindStationsCommand.Execute(null);
+            _ = AutoDiscoverAsync();
         }
         UpdateOverall();
     }
@@ -497,6 +615,7 @@ public sealed partial class MainViewModel : ObservableObject
     private void UpdateOverall()
     {
         Overall = !Connected ? OverallState.Disconnected
+            : BluetoothUnavailable ? OverallState.Error
             : Stations.Any(s => s.Busy || s.State == StationState.Booting) ? OverallState.Busy
             : Stations.Any(s => s.HasError) ? OverallState.Error
             : Stations.Any(s => s.IsAwake) ? OverallState.Awake

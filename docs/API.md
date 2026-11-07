@@ -62,7 +62,8 @@ for a few seconds fixed it).
   "stations": [ /* Station objects */ ],
   "settingsFile": "/home/user/.config/lighthousemanager/appsettings.json",
   "version": "2.0.0",
-  "dimming": { "supported": true, "enabled": true, "dimmed": false, "game": null }
+  "dimming": { "supported": true, "enabled": true, "dimmed": false, "game": null, "fadeSeconds": 1.5 },
+  "bluetooth": "on"
 }
 ```
 
@@ -75,7 +76,8 @@ for a few seconds fixed it).
 | `stations` | All configured stations, in configuration order (empty until base stations are configured) |
 | `settingsFile` | The user settings file to add base stations to (restart the service afterwards) |
 | `version` | Version of the service |
-| `dimming` | [Dimming displays during VR](#dimming-displays-during-vr): `supported` (the brightness can be changed here: Linux with KDE Plasma 6.1+ running; checked every 30 s), `enabled`, `dimmed` (right now), `game` (the VR game being shown, or `null`) |
+| `dimming` | [Dimming displays during VR](#dimming-displays-during-vr): `supported` (the brightness can be changed here: Linux with KDE Plasma 6.1+ running; checked every 30 s), `enabled`, `dimmed` (right now), `game` (the VR game being shown, or `null`), `fadeSeconds` (how long dimming and restoring fade, 0–10; 0 = KDE's own brightness change, without a fade of ours) |
+| `bluetooth` | `on`, `off` (turned off, also airplane mode), `noAdapter` (none found, or the Bluetooth service isn't running), `unknown` (couldn't be checked). Checked every 5 s and before every Bluetooth operation; while `off` or `noAdapter`, commands fail right away and stations get `error` with the reason, automatic wake/sleep waits, and all stations are read again once it's back |
 
 ## Endpoints
 
@@ -84,7 +86,7 @@ for a few seconds fixed it).
 | `GET` | `/api/status` | Current [status](#status) |
 | `GET` | `/api/events` | Live status as Server-Sent Events, see [Events](#events) |
 | `PUT` | `/api/automatic` | Body `{"enabled": true\|false}`, returns the status; saved to the user settings file |
-| `PUT` | `/api/dimming` | Body `{"enabled": true\|false}`: [dim displays during VR](#dimming-displays-during-vr), returns the status; saved to the user settings file; `400` with `{"error": "…"}` where not supported |
+| `PUT` | `/api/dimming` | Body `{"enabled": true\|false, "fadeSeconds": 1.5}`: [dim displays during VR](#dimming-displays-during-vr), returns the status; saved to the user settings file. `fadeSeconds` is optional (missing keeps it), 0–10. `400` with `{"error": "…"}` where not supported or out of range |
 | `GET` | `/api/triggers` | Trigger processes: `{"processes": ["vrserver"]}` |
 | `PUT` | `/api/triggers` | Body `{"processes": ["vrserver", "monado-service"]}`: replace the trigger processes (trimmed, without `.exe`, at least one; otherwise `400`), returns the status; takes effect immediately and is saved |
 | `GET` | `/api/processes` | Names of the running applications, `{"processes": [...]}`, to offer as trigger processes |
@@ -155,7 +157,8 @@ affect automatic handling.
 ### Dimming displays during VR
 
 With `dimming.enabled`, the service dims the desktop displays to the lowest brightness while a VR game is shown and
-restores them about 10 seconds after it ended, each as a short fade. A display whose brightness was changed meanwhile
+restores them about 10 seconds after it ended, each as a fade of `dimming.fadeSeconds` (default 1.5 s; on service stop
+at once). A display whose brightness was changed meanwhile
 is left as it is. Independent of the base stations and of automatic mode. Linux only for now (`dimming.supported`):
 games are detected through Monado (also used by Envision), the brightness is changed through KDE Plasma 6.1 or newer
 (external monitors need DDC/CI).

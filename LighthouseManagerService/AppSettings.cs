@@ -37,6 +37,11 @@ public class AppSettings
     public bool DimDisplaysInVr { get; set; }
 
     /// <summary>
+    ///     How long dimming and restoring fade, in seconds (0 to 10). 0 leaves the change to KDE: one call, no fade of ours.
+    /// </summary>
+    public double DimFadeSeconds { get; set; } = 1.5;
+
+    /// <summary>
     ///     Address of the HTTP API. Empty disables the API. Keep it on loopback: the API has no authentication.
     /// </summary>
     public string ApiUrl { get; set; } = "http://127.0.0.1:47800";

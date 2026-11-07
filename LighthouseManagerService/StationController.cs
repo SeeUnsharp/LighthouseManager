@@ -28,8 +28,14 @@ public sealed class StationController
     private CancellationTokenSource? _automaticCts;
     private bool _automaticMode;
     private string? _activeTrigger;
+    private static readonly TimeSpan BluetoothCheckTimeout = TimeSpan.FromSeconds(3);
+
+    private BluetoothState _bluetooth;
+    private long _bluetoothChecks;
+    private long _bluetoothStored;
     private bool _dimDisplays;
     private bool _dimmingSupported;
+    private double _dimFadeSeconds;
     private bool _dimmed;
     private string? _vrGame;
 
@@ -44,6 +50,7 @@ public sealed class StationController
         _triggerProcesses = settings.Value.GetTriggerProcesses();
         _automaticMode = settings.Value.AutomaticMode;
         _dimDisplays = settings.Value.DimDisplaysInVr;
+        _dimFadeSeconds = settings.Value.DimFadeSeconds;
 
         // Kestrel waits for open requests when stopping: end the live streams (/api/events), otherwise every stop
         // with the tray app connected took the 30 s shutdown timeout
@@ -119,18 +126,103 @@ public sealed class StationController
         {
             lock (_sync) return _dimDisplays;
         }
-        set
+    }
+
+    public const double MaxFadeSeconds = 10;
+
+    public static bool IsValidFade(double seconds) => seconds is >= 0 and <= MaxFadeSeconds;
+
+    /// <summary>
+    ///     How long dimming and restoring fade, in seconds; 0 leaves the change to KDE (one call, no fade of ours).
+    /// </summary>
+    public double DimFadeSeconds
+    {
+        get
         {
-            lock (_sync)
+            lock (_sync) return _dimFadeSeconds;
+        }
+    }
+
+    /// <summary>
+    ///     Changes both together: one save and one status update, so clients and the dimmer never see a mix of the
+    ///     new and the old value.
+    /// </summary>
+    /// <param name="fadeSeconds">null keeps it.</param>
+    public void SetDimming(bool enabled, double? fadeSeconds)
+    {
+        if (fadeSeconds is { } fade && !IsValidFade(fade))
+            throw new ArgumentOutOfRangeException(nameof(fadeSeconds), fade, null);
+        var changes = new List<(string, object)>();
+        lock (_sync)
+        {
+            if (_dimDisplays != enabled)
             {
-                if (_dimDisplays == value) return;
-                _dimDisplays = value;
+                _dimDisplays = enabled;
+                changes.Add(("DimDisplaysInVr", enabled));
             }
 
-            _logger.LogInformation("Dimming displays during VR {State}", value ? "enabled" : "disabled");
-            UserSettings.Save("DimDisplaysInVr", value);
-            Publish();
+            if (fadeSeconds is { } seconds && !_dimFadeSeconds.Equals(seconds))
+            {
+                _dimFadeSeconds = seconds;
+                changes.Add(("DimFadeSeconds", seconds));
+            }
         }
+
+        if (changes.Count == 0) return;
+        _logger.LogInformation("Dimming displays during VR {State}, fade {Seconds} s", enabled ? "enabled" : "disabled",
+            DimFadeSeconds);
+        UserSettings.Save(changes.ToArray());
+        Publish();
+    }
+
+    public BluetoothState Bluetooth
+    {
+        get
+        {
+            lock (_sync) return _bluetooth;
+        }
+    }
+
+    /// <summary>
+    ///     Checks whether Bluetooth is on, before every operation and periodically by the <see cref="Worker" />. When
+    ///     it comes back, all stations are read again (that also clears the "turned off" errors).
+    /// </summary>
+    public async Task<BluetoothState> CheckBluetoothAsync(CancellationToken ct)
+    {
+        long check;
+        lock (_sync) check = ++_bluetoothChecks;
+
+        // A hanging D-Bus/WinRT call must not hold up the trigger watcher or a command: then just try
+        BluetoothState state;
+        using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+        {
+            timeout.CancelAfter(BluetoothCheckTimeout);
+            try
+            {
+                state = await _manager.GetBluetoothStateAsync(timeout.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                state = BluetoothState.Unknown;
+            }
+        }
+
+        BluetoothState previous;
+        lock (_sync)
+        {
+            // Checks run in parallel (watcher, commands): a slower, older one must not overwrite a newer result
+            if (check < _bluetoothStored) return state;
+            _bluetoothStored = check;
+            previous = _bluetooth;
+            _bluetooth = state;
+        }
+
+        if (state == previous) return state;
+        if (state.Describe() is { } problem) _logger.LogWarning("{Problem}", problem);
+        else if (previous.IsUnavailable()) _logger.LogInformation("Bluetooth is available again");
+        Publish();
+        if (previous.IsUnavailable() && !state.IsUnavailable()) ScheduleRefresh(Addresses, TimeSpan.Zero);
+        return state;
     }
 
     /// <summary>
@@ -359,7 +451,7 @@ public sealed class StationController
         {
             return new StatusSnapshot(_automaticMode, _activeTrigger != null, _activeTrigger,
                 _triggerProcesses.ToArray(), _stations.Values.ToArray(), AppPaths.UserSettingsFile, AppPaths.Version,
-                new DimmingStatus(_dimmingSupported, _dimDisplays, _dimmed, _vrGame));
+                new DimmingStatus(_dimmingSupported, _dimDisplays, _dimmed, _vrGame, _dimFadeSeconds), _bluetooth);
         }
     }
 
@@ -420,6 +512,15 @@ public sealed class StationController
 
         try
         {
+            // Turned off: fail right away with the reason, instead of every station retrying for minutes
+            // Short: it's shown per station, clients explain the state from "bluetooth" in the status
+            if ((await CheckBluetoothAsync(cts.Token)).Summary() is { } problem)
+            {
+                Update(addresses, s => s with { Busy = false, Error = problem });
+                Clear(cts);
+                return false;
+            }
+
             await _bluetoothLock.WaitAsync(cts.Token);
         }
         catch (OperationCanceledException)
@@ -535,10 +636,12 @@ public sealed record StatusSnapshot(
     StationInfo[] Stations,
     string SettingsFile,
     string Version,
-    DimmingStatus Dimming);
+    DimmingStatus Dimming,
+    BluetoothState Bluetooth);
 
 /// <param name="Supported">Whether the displays can be dimmed here (Linux with KDE Plasma 6.1+ running, for now).</param>
 /// <param name="Enabled">Dim the displays while a VR game is shown (AppSettings:DimDisplaysInVr).</param>
 /// <param name="Dimmed">The displays are dimmed right now.</param>
 /// <param name="Game">The VR game being shown, if any.</param>
-public sealed record DimmingStatus(bool Supported, bool Enabled, bool Dimmed, string? Game);
+/// <param name="FadeSeconds">How long dimming and restoring fade (AppSettings:DimFadeSeconds); 0 = KDE's own change.</param>
+public sealed record DimmingStatus(bool Supported, bool Enabled, bool Dimmed, string? Game, double FadeSeconds);

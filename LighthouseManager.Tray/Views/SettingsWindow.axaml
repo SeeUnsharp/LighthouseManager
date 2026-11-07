@@ -268,18 +268,17 @@
                                           Command="{Binding Main.SetAutomaticModeCommand}"
                                           CommandParameter="{Binding $self.IsChecked}" />
                         </Grid>
-                        <Grid ColumnDefinitions="*,Auto" IsEnabled="{Binding Main.Connected}"
-                              IsVisible="{Binding Main.DimmingSupported}">
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="Dim displays during VR" />
-                                <TextBlock Classes="secondary" TextWrapping="Wrap"
-                                           Text="Lowest brightness while a VR game runs, restored afterwards (Monado, KDE Plasma)" />
-                            </StackPanel>
-                            <ToggleSwitch Grid.Column="1" OnContent="" OffContent=""
-                                          IsChecked="{Binding Main.DimDisplays, Mode=OneWay}"
-                                          Command="{Binding Main.SetDimDisplaysCommand}"
-                                          CommandParameter="{Binding $self.IsChecked}" />
-                        </Grid>
+                        <StackPanel IsEnabled="{Binding Main.Connected}" IsVisible="{Binding Main.DimmingSupported}">
+                            <TextBlock Text="Dim displays during VR" />
+                            <TextBlock Classes="secondary" TextWrapping="Wrap"
+                                       Text="Lowest brightness while a VR game runs, restored afterwards (Monado, KDE Plasma). Off, KDE's own change, or a fade of 0.5 to 10 seconds." />
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Slider Minimum="0" Maximum="{Binding Main.DimmingMaximum}" TickFrequency="1"
+                                        IsSnapToTickEnabled="True" Value="{Binding Main.DimmingLevel}" />
+                                <TextBlock Grid.Column="1" Text="{Binding Main.DimmingText}" VerticalAlignment="Center"
+                                           MinWidth="80" TextAlignment="Right" />
+                            </Grid>
+                        </StackPanel>
 
                         <Separator />
                         <TextBlock Classes="heading" Text="Start at login" />

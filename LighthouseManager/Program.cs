@@ -95,6 +95,24 @@ internal static class Program
             return Failure;
         }
 
+        // Otherwise every base station would retry for minutes before failing
+        BluetoothState bluetooth;
+        try
+        {
+            bluetooth = await manager.GetBluetoothStateAsync(ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            Log.Information("Cancelled.");
+            return Failure;
+        }
+
+        if (bluetooth.Describe() is { } problem)
+        {
+            Log.Error("{Problem}", problem);
+            return Failure;
+        }
+
         return await command();
     }
 
