@@ -2,7 +2,7 @@
 Command-Line tool to manage Valve Lighthouse 2.0 base stations
 
 Inspired by [Lighthouse Keeper](https://github.com/rossbearman/lighthouse-keeper#lighthouse-keeper) this is a .NET 10 solution to discover and manage Valve Lighthouse 2.0 Base Stations on Windows and Linux.
-It uses [32feet.NET InTheHand.BluetoothLE](https://github.com/inthehandltd/32feet) to communicate with Base Stations (Windows Bluetooth LE API on Windows, BlueZ on Linux).
+It uses [32feet.NET InTheHand.BluetoothLE](https://github.com/inthehand/32feet) to communicate with Base Stations (Windows Bluetooth LE API on Windows, BlueZ on Linux).
 
 The solution consists of:
 - **LighthouseManagerService**: background service that owns the Bluetooth connection, wakes/sleeps base stations automatically and offers a local [HTTP API](docs/API.md)
